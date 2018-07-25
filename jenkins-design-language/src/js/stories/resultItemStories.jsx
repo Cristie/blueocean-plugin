@@ -16,6 +16,14 @@ const wrapperStyle = {
 
 let __ctr = 1;
 
+const strings = {
+    "common.date.duration.display.format": "M [mos], d [Tage], h[Std.], m[m], s[s]",
+    "common.date.duration.format": "m[ Minuten] s[ Sekunden]",
+    "common.date.duration.hint.format": "M [Monate], d [Tage], h[Std.], m[m], s[s]",
+};
+
+const t = (key) => strings[key] || key;
+
 function moLipsum() {
 
     const l = lipsum.length;
@@ -43,9 +51,7 @@ function standardDe() {
         <TimeDuration
             millis={5000000}
             locale="de"
-            displayFormat="M [mos], d [Tage], h[Std.], m[m], s[s]"
-            hintFormat="M [Monate], d [Tage], h[Std.], m[m], s[s]"
-            liveFormat="m[ Minuten] s[ Sekunden]"
+            t={t}
         />
     );
 }
@@ -57,8 +63,7 @@ function liveUpdateDe() {
             updatePeriod={3000}
             millis={50000}
             locale="de"
-            hintFormat="M [mos], d [Tage], h[Std.], m[m], s[s]"
-            liveFormat="m[ Minuten] s[ Sekunden]"
+            t={t}
         />
     );
 }
@@ -113,6 +118,10 @@ function basicStory() {
 
 function urlStory() {
 
+    const longAssTitle = 'This https://en.wikipedia.org/wiki/Label is long. You just won\'t believe how vastly ' +
+        'hugely mindbogglingly long it is. I mean you may think it\'s a long way down the road to the chemist\'s, ' +
+        'but that\'s just peanuts to this title. Also, lipsum. ' + lipsum[0];
+
     return (
         <div style={wrapperStyle}>
             <ResultItem result="success"
@@ -122,12 +131,21 @@ function urlStory() {
                         data="bravo">
                 {moLipsum()}
             </ResultItem>
-            <br/>
+            <br />
             <ResultItem result="success"
                         label="However, ceci.nest.pas.une.url.com nor is foo.com.bar"
                         onExpand={onExpand}
                         onCollapse={onCollapse}
                         data="pipey-mcpipeface">
+                {moLipsum()}
+            </ResultItem>
+            <br />
+            <ResultItem result="running"
+                        label={longAssTitle}
+                        onExpand={onExpand}
+                        onCollapse={onCollapse}
+                        extraInfo="XXXX"
+                        data="bravo">
                 {moLipsum()}
             </ResultItem>
         </div>

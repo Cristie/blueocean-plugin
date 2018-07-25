@@ -20,6 +20,7 @@ public class KnownCapabilities {
     public static final String BLUE_BRANCH="io.jenkins.blueocean.rest.model.BlueBranch";
     public static final String PULL_REQUEST="io.jenkins.blueocean.rest.model.PullRequest";
     public static final String BLUE_ORGANIZATION_FOLDER = "io.jenkins.blueocean.rest.model.BlueOrganizationFolder";
+    public static final String NO_FAVORITE = "io.jenkins.blueocean.rest.model.NoFavorite"; // Can't be favorite in BO
 
     /** Jenkins core/plugin capabilities */
     public static final String JENKINS_WORKFLOW_JOB ="org.jenkinsci.plugins.workflow.job.WorkflowJob";
@@ -27,6 +28,7 @@ public class KnownCapabilities {
     public static final String JENKINS_ABSTRACT_FOLDER ="com.cloudbees.hudson.plugins.folder.AbstractFolder";
     public static final String JENKINS_JOB ="hudson.model.Job";
     public static final String JENKINS_MATRIX_PROJECT="hudson.matrix.MatrixProject";
+    public static final String JENKINS_FREESTYLE_PROJECT="hudson.model.FreeStyleProject";
     public static final String JENKINS_MULTI_BRANCH_PROJECT="jenkins.branch.MultiBranchProject";
     public static final String JENKINS_FREE_STYLE_BUILD="hudson.model.FreeStyleBuild";
     public static final String JENKINS_ORGANIZATION_FOLDER = "jenkins.branch.OrganizationFolder";

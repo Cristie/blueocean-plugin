@@ -1,6 +1,5 @@
 package io.jenkins.blueocean.rest.model;
 
-import hudson.Util;
 import io.jenkins.blueocean.rest.Navigable;
 import io.jenkins.blueocean.rest.hal.Link;
 import org.kohsuke.stapler.WebMethod;
@@ -16,8 +15,9 @@ public abstract class BlueTestResult extends Resource {
     public static final String NAME = "name";
     public static final String ID = "id";
     public static final String AGE = "age";
-    public static final String STDERR = "stderr";
-    public static final String STDOUT = "stdout";
+    public static final String STDERR = "stdErr";
+    public static final String STDOUT = "stdOut";
+    public static final String HAS_STDLOG = "hasStdLog";
     public static final String STATE = "state";
     public static final String ERROR_STACK_TRACE = "errorStackTrace";
     public static final String ERROR_DETAILS = "errorDetails";
@@ -76,6 +76,12 @@ public abstract class BlueTestResult extends Resource {
     @GET
     @WebMethod(name= STDOUT)
     public abstract String getStdOut();
+
+    @Exported(name = HAS_STDLOG )
+    /**
+     * @return <code>true</code> if the result has stOut or stErr to serve
+     */
+    public abstract boolean hasStdLog();
 
     protected abstract String getUniqueId();
 

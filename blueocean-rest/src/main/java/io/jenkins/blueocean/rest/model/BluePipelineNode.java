@@ -2,8 +2,12 @@ package io.jenkins.blueocean.rest.model;
 
 import io.jenkins.blueocean.rest.Navigable;
 import io.jenkins.blueocean.rest.annotation.Capability;
+import org.kohsuke.stapler.HttpResponse;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.WebMethod;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
+import org.kohsuke.stapler.verb.POST;
 
 import java.util.List;
 
@@ -55,7 +59,7 @@ import static io.jenkins.blueocean.rest.model.KnownCapabilities.BLUE_PIPELINE_NO
  * @author Vivek Pandey
  */
 @Capability(BLUE_PIPELINE_NODE)
-public abstract class BluePipelineNode extends BluePipelineStep{
+public abstract class BluePipelineNode extends BluePipelineStep {
 
     /**
      * If the node execution is blocked, its non null, explaining the cause. Otherwise its null.
@@ -69,13 +73,49 @@ public abstract class BluePipelineNode extends BluePipelineStep{
     @Navigable
     public abstract BluePipelineStepContainer getSteps();
 
+    /**
+     * @return <code>true</code> if the pipeline can be restarted from this node
+     */
+    @Exported
+    public abstract boolean isRestartable();
+
+    /**
+     *
+     * @param request To restart the content must be simple json body with a field <code>restart</code> will value <code>true</code>
+     * @return the response content will be {@link BlueRun}
+     */
+    @POST
+    @WebMethod(name = "restart")
+    public abstract HttpResponse restart( StaplerRequest request);
+
+    /**
+     * Represents edge of pipeline flow graph
+     */
     @ExportedBean
-    public abstract static class Edge{
+    public abstract static class Edge {
+        /**
+         * Id of {@link BluePipelineNode#getId()} destination node
+         *
+         * @return node id
+         */
         @Exported
         public abstract String getId();
+
+        /**
+         * Type of {@link BluePipelineNode#getType()} destination node
+         *
+         * @return type
+         */
+        @Exported
+        public abstract String getType();
+
     }
 
+    /**
+     * All the outgoing edges from this node
+     *
+     * @return edges
+     */
     @Exported(name = EDGES, inline = true)
     public abstract List<Edge> getEdges();
-
 }

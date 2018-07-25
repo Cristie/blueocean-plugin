@@ -12,8 +12,12 @@
     }
 }
 
-.RunDetailsHeader-title > span {
+.RunDetailsHeader-title .run-nav-container {
     vertical-align: middle;
+
+    span:first-child {
+        margin-left: 10px;
+    }
 }
 
 .RunDetailsHeader-sources,
@@ -29,11 +33,9 @@
         align-items: center;
 
         &.causes {
-            text-overflow: ellipsis;
-            overflow: hidden;
             display: block;
-            white-space: nowrap;
             max-width: 99.99%;
+            .overflow-ellipsis();
         }
 
         svg+* {
@@ -68,10 +70,8 @@
         span {
             position: relative;
             display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             padding-right: 17px;
+            .overflow-ellipsis();
 
             svg {
                 display: block;
@@ -105,4 +105,21 @@
     .RunDetails-Description {
         margin-bottom: 24px;
     }
+
+    .download-log-button .restart-stage {
+        display: inline-block;
+        text-decoration: underline;
+        margin-right: 5px;
+
+        svg {
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+    }
+}
+
+.DownstreamRuns-header {
+    margin: 1em 0;
+    font-weight: bold;
 }

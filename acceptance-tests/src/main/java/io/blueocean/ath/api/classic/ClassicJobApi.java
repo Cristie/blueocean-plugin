@@ -13,18 +13,19 @@ import com.offbytwo.jenkins.model.Job;
 import com.offbytwo.jenkins.model.JobWithDetails;
 import io.blueocean.ath.BaseUrl;
 import io.blueocean.ath.GitRepositoryRule;
+import io.blueocean.ath.JenkinsUser;
 import io.blueocean.ath.model.Folder;
-import org.apache.http.client.HttpResponseException;
-import org.apache.log4j.Logger;
-import org.openqa.selenium.NotFoundException;
-import org.openqa.selenium.support.ui.FluentWait;
-
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.io.IOException;
 import java.net.URL;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import org.apache.commons.lang.StringUtils;
+import org.apache.http.client.HttpResponseException;
+import org.apache.log4j.Logger;
+import org.openqa.selenium.NotFoundException;
+import org.openqa.selenium.support.ui.FluentWait;
 
 @Singleton
 public class ClassicJobApi {
@@ -36,6 +37,9 @@ public class ClassicJobApi {
 
     @Inject
     public JenkinsServer jenkins;
+
+    @Inject
+    JenkinsUser admin;
 
     public void deletePipeline(String pipeline) throws IOException {
         deletePipeline(null, pipeline);
@@ -51,6 +55,27 @@ public class ClassicJobApi {
             }
         }
     }
+
+    public void deleteFolder(Folder folder) throws IOException {
+        if (folder.getFolders().size() == 1) {
+            jenkins.deleteJob(folder.getPath());
+        } else {
+            throw new UnsupportedOperationException("deleting a nested folder is not supported");
+        }
+    }
+
+    public void deleteFolder(String folder) throws IOException {
+        try {
+            jenkins.deleteJob(folder);
+            logger.info("Deleted folder " + folder);
+        } catch(HttpResponseException e) {
+            if(e.getStatusCode() != 404) {
+                throw e;
+            }
+        }
+    }
+
+
 
     public void createFreeStyleJob(FolderJob folder, String jobName, String command) throws IOException {
         deletePipeline(folder, jobName);
@@ -69,15 +94,31 @@ public class ClassicJobApi {
     public void createPipeline(FolderJob folder, String jobName, String script) throws IOException {
         deletePipeline(folder, jobName);
         URL url = Resources.getResource(this.getClass(), "pipeline.xml");
-        jenkins.createJob(null, jobName, Resources.toString(url, Charsets.UTF_8).replace("{{script}}", script));
+        jenkins.createJob(folder, jobName, Resources.toString(url, Charsets.UTF_8).replace("{{script}}", script));
         logger.info("Created pipeline job "+ jobName);
     }
-    public void createMultlBranchPipeline(FolderJob folder, String pipelineName, String repositoryPath) throws IOException {
+    public void createMultiBranchPipeline(FolderJob folder, String pipelineName, String repositoryPath) throws IOException {
         deletePipeline(folder, pipelineName);
         URL url = Resources.getResource(this.getClass(), "multibranch.xml");
         jenkins.createJob(folder, pipelineName, Resources.toString(url, Charsets.UTF_8).replace("{{repo}}", repositoryPath));
         logger.info("Created multibranch pipeline: "+ pipelineName);
         jenkins.getJob(folder, pipelineName).build();
+    }
+
+    public FolderJob createJobFolder(String name, String jobUrl) throws IOException, UnirestException {
+        if(StringUtils.isBlank(jobUrl) || jobUrl.equals("/")){
+            jobUrl = base+"/";
+        }
+        URL url = Resources.getResource(this.getClass(), "folder.xml");
+        Unirest.post(jobUrl+"createItem?name="+name).header("Content-Type", "text/xml")
+                .basicAuth(admin.username, admin.password)
+                .body(Resources.toByteArray(url)).asString();
+        logger.info("Created folder: "+ name);
+        return new FolderJob(name, jobUrl+"job/"+name+"/");
+    }
+
+    public FolderJob createSubFolder(Folder parentFolder, String name) throws IOException, UnirestException {
+        return createJobFolder(name, parentFolder.getClassJobPath());
     }
 
     private void createFolderImpl(Job folder, String folderName) throws IOException {
@@ -89,7 +130,7 @@ public class ClassicJobApi {
         ImmutableMap<String, Object> params = ImmutableMap.of("mode", "com.cloudbees.hudson.plugins.folder.Folder",
             "name",   folderName, "from", "", "Submit", "OK");
         try {
-            Unirest.post(path).fields(params).asString();
+            Unirest.post(path).basicAuth(admin.username, admin.password).fields(params).asString();
         } catch (UnirestException e) {
             throw new IOException(e);
         }
@@ -119,21 +160,21 @@ public class ClassicJobApi {
         return ret;
     }
 
-    public void createMultlBranchPipeline(FolderJob folder, String pipelineName, GitRepositoryRule repository) throws IOException {
-        createMultlBranchPipeline(folder, pipelineName, repository.gitDirectory.getAbsolutePath());
+    public void createMultiBranchPipeline(FolderJob folder, String pipelineName, GitRepositoryRule repository) throws IOException {
+        createMultiBranchPipeline(folder, pipelineName, repository.gitDirectory.getAbsolutePath());
     }
 
-    public void createFolders(Folder folder, boolean deleteRoot) throws IOException {
+    public FolderJob createFolders(Folder folder, boolean deleteRoot) throws IOException, UnirestException {
         if(deleteRoot) {
-            jenkins.deleteJob(folder.get(0));
+            deleteFolder(folder.get(0));
         }
-        jenkins.createFolder(folder.get(0));
-        FolderJob lastFolder = jenkins.getFolderJob(jenkins.getJob(folder.get(0))).get();
+        FolderJob lastFolder = createJobFolder(folder.get(0), "/");
 
         for (int i = 1; i < folder.getFolders().size(); i++) {
-            lastFolder.createFolder(folder.get(0));
-            lastFolder = jenkins.getFolderJob(lastFolder.getJob(folder.get(0))).get();
+            String subFolderName = folder.get(i);
+            lastFolder = createJobFolder(subFolderName, lastFolder.getUrl());
         };
+        return lastFolder;
     }
 
     public <T> T until(Function<JenkinsServer, T> function, long timeoutInMS) {

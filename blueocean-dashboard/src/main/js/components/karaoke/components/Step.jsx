@@ -15,7 +15,9 @@ function createStepLabel(step) {
 
     if (displayDescription) {
         return [
-            <span className="result-item-label-desc" title={displayDescription}>{displayDescription}</span>,
+            <span className="result-item-label-desc" title={displayDescription}>
+                {displayDescription}
+            </span>,
             <span className="result-item-label-name">&mdash; {displayName}</span>,
         ];
     }
@@ -27,14 +29,17 @@ function createStepLabel(step) {
 export class Step extends Component {
     constructor(props) {
         super(props);
+
         const { augmenter, step } = props;
-        const focused = this.isFocused(props);
+        const oldIsFocused = step.isFocused;
+        const newIsFocused = this.isFocused(props);
+
         // if we are called with anchor that means that we need to fetch the log to display it
-        const { isFocused, ...rest } = step; // this will remove isFocused from the rest, so we can pass the updated state
-        this.pager = KaraokeService.logPager(augmenter, { ...rest, isFocused: focused });
-        logger.debug('isFocused initial', isFocused, 'after', focused);
+        this.pager = KaraokeService.logPager(augmenter, { ...step, isFocused: newIsFocused });
+        logger.debug('isFocused initial', oldIsFocused, 'after', newIsFocused);
+
         this.state = {
-            expanded: focused,
+            expanded: newIsFocused,
         };
     }
 
@@ -45,9 +50,10 @@ export class Step extends Component {
     componentWillMount() {
         const { step } = this.props;
         // needed for running steps as reference
-        this.durationInMillis = (this.durationHarmonize(step)).durationInMillis;
+        this.durationInMillis = this.durationHarmonize(step).durationInMillis;
         logger.debug('durationInMillis mounting', this.durationInMillis);
     }
+
     /**
      * Mainly implemented due to fetch full log `start=0` for a step
      * @param nextProps
@@ -61,15 +67,31 @@ export class Step extends Component {
             this.pager.fetchLog({ url: nextProps.step.logUrl, start: nextStart });
         }
     }
+
     /*
      * Calculate whether we need to expand the step due to linking.
      * When we trigger a log-0 that means we want to see the full log
      */
-    isFocused(props) {
-        const { step, location: { hash: anchorName } } = props;
-        const stepFocus = step.isFocused !== undefined && step.isFocused;
-        const stateFocus = this.state ? this.state.expanded : undefined;
-        let isFocused = stateFocus !== undefined ? stateFocus : stepFocus;
+    isFocused(props, state = {}) {
+        const {
+            step,
+            location: { hash: anchorName },
+        } = props;
+        const stateFocus = state.expanded;
+
+        let isFocused = false;
+
+        if (stateFocus !== undefined) {
+            // Setting the state via interaction overrides any defaults
+            isFocused = stateFocus;
+        } else if (step && (step.isInputStep || step.result === 'FAILURE')) {
+            // Input and failure steps should be opened by default
+            isFocused = true;
+        } else if (props.tailLogs && step && step.isFocused) {
+            // In karaoke + log tailing mode + currently running step
+            isFocused = true;
+        }
+
         // e.g. #step-10-log-1 or #step-10
         if (anchorName) {
             logger.debug('expandAnchor', anchorName);
@@ -80,6 +102,7 @@ export class Step extends Component {
                 isFocused = true;
             }
         }
+
         return isFocused || false;
     }
 
@@ -91,41 +114,45 @@ export class Step extends Component {
     }
 
     render() {
-        const { step, locale, router, location, t, scrollToBottom } = this.props;
+        const { step, locale, router, location, t, scrollToBottom, classicInputUrl } = this.props;
         if (step === undefined || !step) {
             return null;
         }
         const { durationInMillis } = this.durationHarmonize(step);
-        const isFocused = this.isFocused(this.props);
+        const isFocused = this.isFocused(this.props, this.state);
         const { data: logArray, hasMore } = this.pager.log || {};
         let children = null;
         if (logArray && !step.isInputStep) {
             const currentLogUrl = prefixIfNeeded(this.pager.currentLogUrl);
             logger.debug('Updating children');
-            children = (<LogConsole {...{
-                t,
-                router,
-                location,
-                hasMore,
-                scrollToBottom,
-                logArray,
-                currentLogUrl,
-                key: step.logUrl,
-                prefix: `step-${step.id}-`,
-            }}
-            />);
+            children = (
+                <LogConsole
+                    t={t}
+                    router={router}
+                    location={location}
+                    hasMore={hasMore}
+                    scrollToBottom={scrollToBottom}
+                    logArray={logArray}
+                    currentLogUrl={currentLogUrl}
+                    key={step.logUrl}
+                    prefix={`step-${step.id}-`}
+                />
+            );
         } else if (step.isInputStep) {
-            children = <InputStep {...{ step, key: 'step' }} />;
+            children = <InputStep step={step} key="step" classicInputUrl={classicInputUrl} />;
         } else if (!logArray && step.hasLogs) {
             children = <span key={'span'}>&nbsp;</span>;
         }
         const getLogForNode = () => {
             if (this.pager.log === undefined || (this.pager.log && !this.pager.log.data)) {
-                const cfg = { url: step.logUrl };
+                const cfg = { url: step.logUrl, followAlong: this.props.augmenter.karaoke };
                 logger.debug('getLogForNode called will fetch now with cfg.', cfg);
                 this.pager.fetchLog(cfg);
                 // we are now want to expand the result item
                 this.setState({ expanded: true });
+            }
+            if (this.props.onUserExpand) {
+                this.props.onUserExpand(step);
             }
         };
         const removeFocus = () => {
@@ -135,36 +162,32 @@ export class Step extends Component {
                 delete location.hash;
                 router.push(location);
             }
+            if (this.props.onUserCollapse) {
+                this.props.onUserCollapse(step);
+            }
         };
         // some ATH hook enhancements
         const logConsoleClass = `logConsole step-${step.id}`;
-        // duration calaculations
+        // duration calculations
         const duration = step.isRunning ? this.durationInMillis : durationInMillis;
         logger.debug('duration', duration, step.isRunning);
-        const time = (<TimeDuration
-            millis={duration }
-            liveUpdate={step.isRunning}
-            updatePeriod={1000}
-            locale={locale}
-            displayFormat={t('common.date.duration.display.format', { defaultValue: 'M[ month] d[ days] h[ hours] m[ minutes] s[ seconds]' })}
-            liveFormat={t('common.date.duration.format', { defaultValue: 'm[ minutes] s[ seconds]' })}
-            hintFormat={t('common.date.duration.hint.format', { defaultValue: 'M [month], d [days], h[h], m[m], s[s]' })}
-        />);
+        const time = <TimeDuration millis={duration} liveUpdate={step.isRunning} updatePeriod={1000} locale={locale} t={t} />;
 
-        return (<div className={logConsoleClass}>
-            <ResultItem {...{
-                extraInfo: time,
-                key: step.key,
-                result: step.computedResult.toLowerCase(),
-                expanded: isFocused,
-                label: createStepLabel(step),
-                onCollapse: removeFocus,
-                onExpand: getLogForNode,
-            }}
-            >
-                { children }
-            </ResultItem>
-        </div>);
+        return (
+            <div className={logConsoleClass}>
+                <ResultItem
+                    extraInfo={time}
+                    key={step.key}
+                    result={step.computedResult.toLowerCase()}
+                    expanded={isFocused}
+                    label={createStepLabel(step)}
+                    onCollapse={removeFocus}
+                    onExpand={getLogForNode}
+                >
+                    {children}
+                </ResultItem>
+            </div>
+        );
     }
 }
 
@@ -172,8 +195,12 @@ Step.propTypes = {
     augmenter: PropTypes.object,
     step: PropTypes.object.isRequired,
     location: PropTypes.object,
-    router: PropTypes.shape,
+    router: PropTypes.object,
     locale: PropTypes.object,
     t: PropTypes.func,
     scrollToBottom: PropTypes.bool,
+    onUserExpand: PropTypes.func,
+    onUserCollapse: PropTypes.func,
+    tailLogs: PropTypes.bool,
+    classicInputUrl: PropTypes.string,
 };

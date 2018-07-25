@@ -1,7 +1,7 @@
 const jobName = 'withGitFlow';
 const path = require("path");
 const pathToRepo = path.resolve('./target/test2-project-folder');
-const soureRep = './src/test/resources/multibranch_2';
+const sourceRep = './src/test/resources/multibranch_2';
 const git = require("../../../main/js/api/git");
 
 function rowSelectorFor(jobName) {
@@ -10,7 +10,7 @@ function rowSelectorFor(jobName) {
 
 /** @module multibranchOpening
  * @memberof multibranch
- * @description Check we run and open results screen for multibranch projects, 
+ * @description Check we run and open results screen for multibranch projects,
  *              and that the stage graph shows and completes.
  */
 module.exports = {
@@ -19,7 +19,7 @@ module.exports = {
     // ** creating a git repo */
     before: function (browser, done) {
           // we creating a git repo in target based on the src repo (see above)
-          git.createRepo(soureRep, pathToRepo)
+          git.createRepo(sourceRep, pathToRepo)
               .then(function () {
                   git.createBranch('feature/1', pathToRepo)
                       .then(done);
@@ -53,14 +53,14 @@ module.exports = {
         var multibranchCreate = browser.page.multibranchCreate().navigate();
         multibranchCreate.createBranch(jobName, pathToRepo);
 
-         var blueActivityPage = browser.page.bluePipelineActivity().forJob(jobName, 'jenkins');
-         blueActivityPage.click(".branches");
+        var blueActivityPage = browser.page.bluePipelineActivity().forJob(jobName, 'jenkins');
+        blueActivityPage.waitForElementVisible('.Header-pageTabs .branches');
+        blueActivityPage.click(".Header-pageTabs .branches");
 
-         blueActivityPage.waitForElementVisible('.JTable-row[data-branch="master"]');
-         blueActivityPage.click('.JTable-row[data-branch="master"]');
+        blueActivityPage.waitForElementVisible('.JTable-row[data-branch="master"]');
+        blueActivityPage.click('.JTable-row[data-branch="master"]');
 
-         blueActivityPage.assertStageGraphShows();
-
+        blueActivityPage.assertStageGraphShows();
     },
 
     /**
@@ -82,18 +82,18 @@ module.exports = {
         blueActivityPage.assertStageGraphShows();
 
     },
-    
+
     /**
      * Make sure we can open the feature/1 branch from branch screen
-     * Regression: https://issues.jenkins-ci.org/browse/JENKINS-40027     
+     * Regression: https://issues.jenkins-ci.org/browse/JENKINS-40027
      */
     'open feature/1 from branches tab': function (browser) {
-      
-        var jobName = "featureBranchesMB";      
-        var multibranchCreate = browser.page.multibranchCreate().navigate();      
+
+        var jobName = "featureBranchesMB";
+        var multibranchCreate = browser.page.multibranchCreate().navigate();
         multibranchCreate.createBranch(jobName, pathToRepo);
 
-      
+
          var blueActivityPage = browser.page.bluePipelineActivity().forJob(jobName, 'jenkins');
          blueActivityPage.waitForElementVisible('.branches');
          blueActivityPage.click(".branches");
@@ -103,7 +103,7 @@ module.exports = {
          blueActivityPage.click(rowSelector);
 
          blueActivityPage.assertStageGraphShows();
-   
+
     }
 
 }

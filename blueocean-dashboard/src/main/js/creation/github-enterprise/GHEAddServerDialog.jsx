@@ -5,13 +5,10 @@ import { Dialog, FormElement, TextInput } from '@jenkins-cd/design-language';
 
 import ServerErrorRenderer from './ServerErrorRenderer';
 
-
 let t = null;
-
 
 @observer
 class GHEAddServerDialog extends React.Component {
-
     constructor(props) {
         super(props);
 
@@ -26,6 +23,20 @@ class GHEAddServerDialog extends React.Component {
 
         t = props.flowManager.translate;
     }
+
+    componentDidMount() {
+        document.addEventListener('keydown', this.handleKeyDownEvent);
+    }
+
+    componentWillUnmount() {
+        document.removeEventListener('keydown', this.handleKeyDownEvent);
+    }
+
+    handleKeyDownEvent = event => {
+        if (event.key === 'Enter') {
+            this._onCreateClick();
+        }
+    };
 
     _nameChange(value) {
         this.setState({
@@ -68,11 +79,9 @@ class GHEAddServerDialog extends React.Component {
 
         const { serverManager } = this.props.flowManager;
 
-        serverManager.createServer(this.state.nameValue, this.state.urlValue)
-            .then(
-                server => this._onCreateServerSuccess(server),
-                error => this._onCreateServerFailure(error),
-            );
+        serverManager
+            .createServer(this.state.nameValue, this.state.urlValue)
+            .then(server => this._onCreateServerSuccess(server), error => this._onCreateServerFailure(error));
 
         this.setState({
             pending: true,
@@ -112,31 +121,42 @@ class GHEAddServerDialog extends React.Component {
 
     _onCreateServerFailure(error) {
         const { duplicateName, duplicateUrl, invalidServer, invalidApiUrl } = error;
+        const serverUrl = this.state.urlValue;
 
-        const newState = {
-            pending: false,
-            unknownError: null,
-            nameErrorMsg: null,
-            urlErrorMsg: null,
-        };
+        if (serverUrl.substring(serverUrl.length - 7, serverUrl.length) !== '/api/v3') {
+            const retryServerUrl = serverUrl + (serverUrl.substring(serverUrl.length - 1, serverUrl.length) == '/' ? 'api/v3' : '/api/v3');
 
-        if (duplicateName) {
-            newState.nameErrorMsg = t('creation.githubent.add_server.text_name_error_duplicate');
+            this.setState({
+                urlValue: retryServerUrl,
+            });
+
+            this._onCreateClick();
+        } else {
+            const newState = {
+                pending: false,
+                unknownError: null,
+                nameErrorMsg: null,
+                urlErrorMsg: null,
+            };
+
+            if (duplicateName) {
+                newState.nameErrorMsg = t('creation.githubent.add_server.text_name_error_duplicate');
+            }
+
+            if (duplicateUrl) {
+                newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_duplicate');
+            } else if (invalidServer) {
+                newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_invalid_server');
+            } else if (invalidApiUrl) {
+                newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_invalid_apiurl');
+            }
+
+            if (!duplicateName && !duplicateUrl && !invalidServer && !invalidApiUrl) {
+                newState.unknownError = error;
+            }
+
+            this.setState(newState);
         }
-
-        if (duplicateUrl) {
-            newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_duplicate');
-        } else if (invalidServer) {
-            newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_invalid_server');
-        } else if (invalidApiUrl) {
-            newState.urlErrorMsg = t('creation.githubent.add_server.text_url_error_invalid_apiurl');
-        }
-
-        if (!duplicateName && !duplicateUrl && !invalidServer && !invalidApiUrl) {
-            newState.unknownError = error;
-        }
-
-        this.setState(newState);
     }
 
     _onCloseClick(credential) {
@@ -158,30 +178,29 @@ class GHEAddServerDialog extends React.Component {
         ];
 
         return (
-            <Dialog
-                className="github-enterprise-add-server-dialog"
-                title={t('creation.githubent.add_server.title')}
-                buttons={buttons}
-            >
-                <FormElement
-                    className="server-new"
-                    title={t('creation.githubent.add_server.instructions')}
-                    verticalLayout
-                >
-                    { this.state.unknownError && <ServerErrorRenderer error={this.state.unknownError} /> }
+            <Dialog className="github-enterprise-add-server-dialog" title={t('creation.githubent.add_server.title')} buttons={buttons}>
+                <FormElement className="server-new" title={t('creation.githubent.add_server.instructions')} verticalLayout>
+                    {this.state.unknownError && <ServerErrorRenderer error={this.state.unknownError} />}
 
                     <FormElement title={t('creation.githubent.add_server.text_name_title')} errorMessage={this.state.nameErrorMsg}>
-                        <TextInput className="text-name" placeholder={t('creation.githubent.add_server.text_name_placeholder')} onChange={val => this._nameChange(val)} />
+                        <TextInput
+                            className="text-name"
+                            placeholder={t('creation.githubent.add_server.text_name_placeholder')}
+                            onChange={val => this._nameChange(val)}
+                        />
                     </FormElement>
 
                     <FormElement title={t('creation.githubent.add_server.text_url_title')} errorMessage={this.state.urlErrorMsg}>
-                        <TextInput className="text-url" placeholder={t('creation.githubent.add_server.text_url_placeholder')} onChange={val => this._urlChange(val)} />
+                        <TextInput
+                            className="text-url"
+                            placeholder={t('creation.githubent.add_server.text_url_placeholder')}
+                            onChange={val => this._urlChange(val)}
+                        />
                     </FormElement>
                 </FormElement>
             </Dialog>
         );
     }
-
 }
 
 GHEAddServerDialog.propTypes = {

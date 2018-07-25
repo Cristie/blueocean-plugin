@@ -8,6 +8,7 @@ import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.json.JsonBody;
 import org.kohsuke.stapler.verb.PUT;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.List;
@@ -21,7 +22,7 @@ import static io.jenkins.blueocean.rest.model.KnownCapabilities.BLUE_PIPELINE;
  * @author Vivek Pandey
  */
 @Capability(BLUE_PIPELINE)
-public abstract class BluePipeline extends Resource {
+public abstract class BluePipeline extends Resource implements BluePipelineItem, BlueRunnableItem, BlueManagedSource {
     public static final String ORGANIZATION="organization";
     public static final String NAME="name";
     public static final String DISPLAY_NAME="displayName";
@@ -102,7 +103,7 @@ public abstract class BluePipeline extends Resource {
     public abstract BlueRun getLatestRun();
 
     /**
-     * @return Estiamated duration based on last pipeline runs. -1 is returned if there is no estimate available.
+     * @return Estimated duration based on last pipeline runs. -1 is returned if there is no estimate available.
      *
      */
     @Exported(name = ESTIMATED_DURATION)
@@ -112,8 +113,7 @@ public abstract class BluePipeline extends Resource {
      * @return Gives Runs in this pipeline
      */
     @Navigable
-    public abstract BlueRunContainer getRuns();
-
+    public abstract @CheckForNull BlueRunContainer getRuns();
 
     /**
      *

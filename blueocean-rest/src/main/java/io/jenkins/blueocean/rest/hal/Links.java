@@ -90,7 +90,7 @@ public final class Links extends HashMap<String,Link>{
     private void populateReferences(){
         Class clazz = self.getClass();
         /** Find if there is method returning a {@link Container}, add this as link */
-        for (Method m : findMethods(clazz,clazz,new ArrayList<Method>())) {
+        for (Method m : findMethods(clazz,clazz,new ArrayList<>())) {
             String p = getPathFromMethodName(m);
             put(p, createLinkRef(p));
         }
@@ -120,7 +120,8 @@ public final class Links extends HashMap<String,Link>{
         if(ref != null){
             return ref;
         }
-        put(SELF, self.getLink());
+        ref = self.getLink();
+        put(SELF, ref);
         return ref;
     }
 
@@ -141,9 +142,9 @@ public final class Links extends HashMap<String,Link>{
         if(exportedAnn != null && !exportedAnn.name().trim().isEmpty())
             return exportedAnn.name();
         if(methodName.startsWith("get")){
-            return methodName.substring(3).toLowerCase();
+            return methodName.substring(3, 4).toLowerCase() + methodName.substring(4);
         }else if(methodName.startsWith("do")){
-            return methodName.substring(2).toLowerCase();
+            return methodName.substring(2, 3).toLowerCase() + methodName.substring(3);
         }else{
             return "";
         }

@@ -3,9 +3,10 @@
 import React, { PropTypes } from 'react';
 import { Link } from 'react-router';
 import { Icon } from '@jenkins-cd/design-language';
-import { Paths, pipelineService } from '@jenkins-cd/blueocean-core-js';
+import { Paths, pipelineService, i18nTranslator } from '@jenkins-cd/blueocean-core-js';
 import Security from './services/Security';
 import { isSshRepositoryUrl } from './GitUtils';
+const t = i18nTranslator('blueocean-pipeline-editor');
 
 class PipelineEditorLink extends React.Component {
     state = {};
@@ -20,7 +21,7 @@ class PipelineEditorLink extends React.Component {
         }
 
         if (!this.state.supportsSave) {
-            return <div/>;
+            return <div />;
         }
 
         const { run, pipeline } = this.props;
@@ -34,7 +35,7 @@ class PipelineEditorLink extends React.Component {
         const baseUrl = `/organizations/${pipeline.organization}/pipeline-editor/${encodeURIComponent(pipelinePath.join('/'))}/${branch}/`;
 
         return (
-            <Link className="pipeline-editor-link" to={baseUrl} title="Edit">
+            <Link className="pipeline-editor-link" to={baseUrl} title={t('branchdetail.actionbutton.pipeline.edit', { defaultValue: 'Edit' })}>
                 <Icon icon="ImageEdit" size={24} />
             </Link>
         );
@@ -44,20 +45,18 @@ class PipelineEditorLink extends React.Component {
         const { pipeline } = this.props;
         const folder = pipeline.fullName.split('/')[0];
         const href = Paths.rest.apiRoot() + '/organizations/' + pipeline.organization + '/pipelines/' + folder + '/';
-        pipelineService.fetchPipeline(href, { useCache: true, disableCapabilites: false })
-            .then(pipeline => {
-                if (this._canSavePipeline(pipeline)) {
-                    this.setState({ supportsSave: true });
-                }
-            });
+        pipelineService.fetchPipeline(href, { useCache: true, disableCapabilites: false }).then(pipeline => {
+            if (this._canSavePipeline(pipeline)) {
+                this.setState({ supportsSave: true });
+            }
+        });
     }
 
     _canSavePipeline(pipeline) {
         if (pipeline.scmSource && pipeline.scmSource.id === 'git') {
-            return isSshRepositoryUrl(pipeline.scmSource.apiUrl);
+            return true;
         }
-        if (pipeline._capabilities && pipeline._capabilities
-                .find(capability => capability === 'io.jenkins.blueocean.rest.model.BluePipelineScm')) {
+        if (pipeline._capabilities && pipeline._capabilities.find(capability => capability === 'io.jenkins.blueocean.rest.model.BluePipelineScm')) {
             return true;
         }
         return false;

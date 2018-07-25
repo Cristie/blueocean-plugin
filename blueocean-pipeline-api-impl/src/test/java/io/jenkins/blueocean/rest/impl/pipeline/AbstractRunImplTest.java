@@ -8,8 +8,11 @@ import hudson.model.Queue;
 import hudson.model.Run;
 import hudson.tasks.ArtifactArchiver;
 import hudson.tasks.Shell;
+import io.jenkins.blueocean.rest.factory.BluePipelineFactory;
+import io.jenkins.blueocean.rest.factory.BlueRunFactory;
 import io.jenkins.blueocean.rest.factory.organization.OrganizationFactory;
 import io.jenkins.blueocean.rest.model.BlueOrganization;
+import io.jenkins.blueocean.service.embedded.rest.AbstractRunImpl;
 import jenkins.branch.BranchProperty;
 import jenkins.branch.BranchSource;
 import jenkins.branch.DefaultBranchPropertyStrategy;
@@ -17,11 +20,13 @@ import jenkins.model.Jenkins;
 import jenkins.plugins.git.GitSCMSource;
 import jenkins.plugins.git.GitSampleRepoRule;
 import jenkins.scm.api.SCMSource;
+import jenkins.util.SystemProperties;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject;
 import org.jenkinsci.plugins.workflow.test.steps.SemaphoreStep;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -50,6 +55,12 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         super.setup();
         sampleRepo.init();
     }
+
+    @After
+    public void tearDown() {
+        System.clearProperty(AbstractRunImpl.BLUEOCEAN_FEATURE_RUN_DESCRIPTION_ENABLED);
+    }
+
     //Disabled, see JENKINS-36453
     @Test @Ignore
     public void replayRunTest() throws Exception {
@@ -148,26 +159,21 @@ public class AbstractRunImplTest extends PipelineBaseTest {
 
     @Test(timeout = 20000)
     @Issue("JENKINS-44736")
-    public void earlyUnstableStatusShouldReportPunStateAsRunningAndResultAsUnknown() throws Exception {
-        WorkflowJob p = j.createProject(WorkflowJob.class, "project");
-
-        URL resource = Resources.getResource(getClass(), "earlyUnstableStatusShouldReportPunStateAsRunningAndResultAsUnknown.jenkinsfile");
-        String jenkinsFile = Resources.toString(resource, Charsets.UTF_8);
-        p.setDefinition(new CpsFlowDefinition(jenkinsFile, true));
-        p.save();
+    public void earlyUnstableStatusShouldReportRunStateAsRunningAndResultAsUnknown() throws Exception {
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"earlyUnstableStatusShouldReportPunStateAsRunningAndResultAsUnknown.jenkinsfile");
 
         Run r = p.scheduleBuild2(0).waitForStart();
 
-        String url = "/organizations/jenkins/pipelines/project/runs/" + r.getId() + "/";
+        String url = String.format("/organizations/jenkins/pipelines/%s/runs/%s/", p.getName(), r.getId());
         Map m = request().get(url).build(Map.class);
-
-        // Wait 'til we're out of queue and actually on the node.
-        j.waitForMessage("Running on master", r);
 
         // While the run has not finished keep checking that the result is unknown
         while (!"FINISHED".equals(m.get("state").toString())) {
-            Assert.assertEquals("RUNNING", m.get("state"));
-            Assert.assertEquals("UNKNOWN", m.get("result"));
+            // when running, check that it is 'UNKNOWN' state
+            if("RUNNING".equals(m.get("state").toString())) {
+                Assert.assertEquals("RUNNING", m.get("state"));
+                Assert.assertEquals("UNKNOWN", m.get("result"));
+            }
             Thread.sleep(1000);
             m = request().get(url).build(Map.class);
         }
@@ -179,15 +185,10 @@ public class AbstractRunImplTest extends PipelineBaseTest {
 
     @Test
     public void pipelineLatestRunIncludesRunning() throws Exception {
-        WorkflowJob p = j.createProject(WorkflowJob.class, "project");
-
-        URL resource = Resources.getResource(getClass(), "latestRunIncludesQueued.jenkinsfile");
-        String jenkinsFile = Resources.toString(resource, Charsets.UTF_8);
-        p.setDefinition(new CpsFlowDefinition(jenkinsFile, true));
-        p.save();
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"latestRunIncludesQueued.jenkinsfile");
 
         // Ensure null before first run
-        Map pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        Map pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Assert.assertNull(pipeline.get("latestRun"));
 
         // Run until completed
@@ -202,7 +203,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("Still waiting to schedule task", r2);
 
         // Get latest run for this pipeline
-        pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Map latestRun = (Map) pipeline.get("latestRun");
 
         Assert.assertEquals("QUEUED", latestRun.get("state"));
@@ -212,12 +213,13 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         String idOfSecondRun = (String) latestRun.get("id");
 
         // Replay this - with limited retry
+        String replayURL = String.format("/organizations/jenkins/pipelines/%s/runs/%s/replay/", p.getName(), idOfSecondRun);
         try {
             Thread.sleep(200);
-            request().post("/organizations/jenkins/pipelines/project/runs/" + idOfSecondRun + "/replay/").build(String.class);
+            request().post(replayURL).build(String.class);
         } catch (Exception e) {
             Thread.sleep(200);
-            request().post("/organizations/jenkins/pipelines/project/runs/" + idOfSecondRun + "/replay/").build(String.class);
+            request().post(replayURL).build(String.class);
         }
 
         // Sleep to make sure the build actually gets launched.
@@ -227,7 +229,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("Still waiting to schedule task", r3);
 
         // Get latest run for this pipeline
-        pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         latestRun = (Map) pipeline.get("latestRun");
 
         // It should be running
@@ -236,18 +238,52 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         Assert.assertEquals("Waiting for next available executor", latestRun.get("causeOfBlockage"));
     }
 
+    @Test
+    public void pipelineRunIncludesNextPrevLinks() throws Exception {
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"latestRunIncludesQueued.jenkinsfile");
+
+        // Ensure null before first run
+        Map pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
+        Assert.assertNull(pipeline.get("latestRun"));
+
+        // Run until completed
+        Run r = p.scheduleBuild2(0).waitForStart();
+        j.waitForCompletion(r);
+
+        // Make the next runs queue
+        j.jenkins.setNumExecutors(1);
+
+        // Schedule another run so it goes in the queue
+        WorkflowRun r2 = p.scheduleBuild2(0).waitForStart();
+        j.waitForCompletion(r2);
+
+        // Schedule another run so it goes in the queue
+        WorkflowRun r3 = p.scheduleBuild2(0).waitForStart();
+        j.waitForCompletion(r3);
+
+        // Get latest run for this pipeline
+        Map secondRun = request().get(String.format("/organizations/jenkins/pipelines/%s/runs/2", p.getName())).build(Map.class);
+
+        String prevRunUrl = ((Map)((Map)secondRun.get("_links")).get("prevRun")).get("href").toString();
+        String nextRunUrl = ((Map)((Map)secondRun.get("_links")).get("nextRun")).get("href").toString();
+
+        //check the run id of the second run
+        Assert.assertEquals("2", secondRun.get("id"));
+
+        //check that id in previous run url is 1
+        Assert.assertEquals("1", prevRunUrl.substring(prevRunUrl.length() - 2, prevRunUrl.length() - 1));
+
+        //check that id in next run url is 3
+        Assert.assertEquals("3", nextRunUrl.substring(nextRunUrl.length() - 2, nextRunUrl.length() - 1));
+    }
+
     @Issue("JENKINS-44981")
     @Test
     public void queuedSingleNode() throws Exception {
-        WorkflowJob p = j.createProject(WorkflowJob.class, "project");
-
-        URL resource = Resources.getResource(getClass(), "queuedSingleNode.jenkinsfile");
-        String jenkinsFile = Resources.toString(resource, Charsets.UTF_8);
-        p.setDefinition(new CpsFlowDefinition(jenkinsFile, true));
-        p.save();
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"queuedSingleNode.jenkinsfile");
 
         // Ensure null before first run
-        Map pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        Map pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Assert.assertNull(pipeline.get("latestRun"));
 
         // Run until completed
@@ -255,7 +291,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("Still waiting to schedule task", r);
 
         // Get latest run for this pipeline
-        pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Map latestRun = (Map) pipeline.get("latestRun");
 
         Assert.assertEquals("QUEUED", latestRun.get("state"));
@@ -270,15 +306,11 @@ public class AbstractRunImplTest extends PipelineBaseTest {
     @Issue("JENKINS-44981")
     @Test
     public void declarativeQueuedAgent() throws Exception {
-        WorkflowJob p = j.createProject(WorkflowJob.class, "project");
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"declarativeQueuedAgent.jenkinsfile");
 
-        URL resource = Resources.getResource(getClass(), "declarativeQueuedAgent.jenkinsfile");
-        String jenkinsFile = Resources.toString(resource, Charsets.UTF_8);
-        p.setDefinition(new CpsFlowDefinition(jenkinsFile, true));
-        p.save();
         j.jenkins.setNumExecutors(0);
         // Ensure null before first run
-        Map pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        Map pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Assert.assertNull(pipeline.get("latestRun"));
 
         // Run until completed
@@ -286,7 +318,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("Still waiting to schedule task", r);
 
         // Get latest run for this pipeline
-        String url = "/organizations/jenkins/pipelines/project/runs/" + r.getId() + "/";
+        String url = String.format("/organizations/jenkins/pipelines/%s/runs/%s/", p.getName(), r.getId());
         Map latestRun = request().get(url).build(Map.class);
 
         Assert.assertEquals("QUEUED", latestRun.get("state"));
@@ -305,7 +337,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("Still waiting to schedule task", r2);
 
         // Get latest run for this pipeline
-        url = "/organizations/jenkins/pipelines/project/runs/" + r2.getId() + "/";
+        url = String.format("/organizations/jenkins/pipelines/%s/runs/%s/", p.getName(), r2.getId());
         latestRun = request().get(url).build(Map.class);
 
         Assert.assertEquals("2", latestRun.get("id"));
@@ -320,15 +352,10 @@ public class AbstractRunImplTest extends PipelineBaseTest {
     @Issue("JENKINS-44981")
     @Test
     public void queuedAndRunningParallel() throws Exception {
-        WorkflowJob p = j.createProject(WorkflowJob.class, "project");
-
-        URL resource = Resources.getResource(getClass(), "queuedAndRunningParallel.jenkinsfile");
-        String jenkinsFile = Resources.toString(resource, Charsets.UTF_8);
-        p.setDefinition(new CpsFlowDefinition(jenkinsFile, true));
-        p.save();
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"queuedAndRunningParallel.jenkinsfile");
 
         // Ensure null before first run
-        Map pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        Map pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Assert.assertNull(pipeline.get("latestRun"));
         j.createOnlineSlave(Label.get("first"));
 
@@ -338,7 +365,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.waitForMessage("[Pipeline] [b] node", r);
 
         // Get latest run for this pipeline
-        pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         Map latestRun = (Map) pipeline.get("latestRun");
 
         Assert.assertEquals("RUNNING", latestRun.get("state"));
@@ -348,7 +375,7 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         // Sleep to make sure we get the a branch end node...
         Thread.sleep(1000);
 
-        pipeline = request().get("/organizations/jenkins/pipelines/project/").build(Map.class);
+        pipeline = request().get(String.format("/organizations/jenkins/pipelines/%s/", p.getName())).build(Map.class);
         latestRun = (Map) pipeline.get("latestRun");
 
         Assert.assertEquals("QUEUED", latestRun.get("state"));
@@ -358,5 +385,22 @@ public class AbstractRunImplTest extends PipelineBaseTest {
         j.createOnlineSlave(Label.get("second"));
 
         j.assertBuildStatusSuccess(j.waitForCompletion(r));
+    }
+
+    @Test
+    public void disableDescription() throws Exception {
+        WorkflowJob p = createWorkflowJobWithJenkinsfile(getClass(),"disableDescription.jenkinsfile");
+
+        WorkflowRun r = p.scheduleBuild2(0).waitForStart();
+        j.waitForCompletion(r);
+
+        // Description should be available to the pipeline
+        Map run = request().get(String.format("/organizations/jenkins/pipelines/%s/runs/1/", p.getName())).build(Map.class);
+        Assert.assertEquals("A cool pipeline", run.get("description"));
+
+        // Disable descriptions
+        System.setProperty(AbstractRunImpl.BLUEOCEAN_FEATURE_RUN_DESCRIPTION_ENABLED, "false");
+        run = request().get(String.format("/organizations/jenkins/pipelines/%s/runs/1/", p.getName())).build(Map.class);
+        Assert.assertEquals(null, run.get("description"));
     }
 }

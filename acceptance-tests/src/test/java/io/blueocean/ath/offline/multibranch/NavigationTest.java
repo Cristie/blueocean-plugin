@@ -18,7 +18,7 @@ import javax.inject.Inject;
 import java.io.IOException;
 
 /**
- * This class is for testing anything to do with click on links in Mulitbranch pipelines.
+ * This class is for testing anything to do with click on links in Multibranch pipelines.
  */
 @RunWith(ATHJUnitRunner.class)
 public class NavigationTest extends BlueOceanAcceptanceTest {
@@ -41,7 +41,7 @@ public class NavigationTest extends BlueOceanAcceptanceTest {
         git.addAll();
         git.commit("Added Jenkinsfile");
         git.createBranch("feature/1");
-
+        git.createBranch("feature@2");
         MultiBranchPipeline pipeline = multiBranchPipelineFactory.pipeline(Folder.folders("a folder", "bfolder", "folder"), "NavigationTest_testNavigation");
         pipeline.createPipeline(git);
 
@@ -52,5 +52,9 @@ public class NavigationTest extends BlueOceanAcceptanceTest {
         BranchPage branchPage = activityPage.clickBranchTab();
 
         branchPage.clickHistoryButton("feature/1");
+        activityPage.open();
+        activityPage.getRunRowForBranch("feature@2").click();
+        pipeline.getRunDetailsPipelinePage().checkUrl("feature%402", 1);
+        pipeline.getRunDetailsPipelinePage().checkBasicDomElements();
     }
 }

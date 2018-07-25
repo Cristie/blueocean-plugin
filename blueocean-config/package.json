@@ -14,8 +14,9 @@
     "rollbar-browser": "1.9.2"
   },
   "devDependencies": {
-    "@jenkins-cd/js-builder": "0.0.59",
+    "@jenkins-cd/js-builder": "0.0.63",
     "babel-eslint": "6.1.2",
+    "create-hmac": "1.1.4",
     "eslint-plugin-react": "4.3.0",
     "gulp": "3.9.1"
   },

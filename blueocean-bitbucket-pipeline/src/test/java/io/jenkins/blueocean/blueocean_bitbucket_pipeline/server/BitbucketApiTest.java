@@ -8,6 +8,8 @@ import com.google.common.collect.ImmutableMap;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import hudson.util.Secret;
 import io.jenkins.blueocean.blueocean_bitbucket_pipeline.BitbucketApi;
+import io.jenkins.blueocean.blueocean_bitbucket_pipeline.HttpRequest;
+import io.jenkins.blueocean.blueocean_bitbucket_pipeline.HttpResponse;
 import io.jenkins.blueocean.blueocean_bitbucket_pipeline.model.BbBranch;
 import io.jenkins.blueocean.blueocean_bitbucket_pipeline.model.BbOrg;
 import io.jenkins.blueocean.blueocean_bitbucket_pipeline.model.BbPage;
@@ -141,6 +143,13 @@ public class BitbucketApiTest extends BbServerWireMock {
     }
 
     @Test
+    public void testAutoRedirectDisabled() {
+        HttpResponse response = new HttpRequest.HttpRequestBuilder(apiUrl).build().get(apiUrl+"/rest/api/1.0/test-redirect");
+        assertEquals(302, response.getStatus());
+        assertEquals("http://localhost:7990/bitbucket/rest/api/1.0/redirect-test-success", response.getHeader("Location"));
+    }
+
+    @Test
     public void testEmptyRepo(){
         boolean empty = api.isEmptyRepo("TESTP", "empty-repo-test");
         assertTrue(empty);
@@ -151,6 +160,24 @@ public class BitbucketApiTest extends BbServerWireMock {
         assertNotNull(saveResponse.getCommitId());
         String content = api.getContent("TESTP", "empty-repo-test", "README.md", (String) saveResponse.getCommitId());
         assertEquals("This is test content in new file", content);
+    }
+
+    @Test
+    public void testEmptyRepo204(){
+        BbBranch branch = api.getDefaultBranch("TESTP","empty1");
+        assertNull(branch);
+    }
+
+    @Test
+    public void testDefaultBranchPre5_6_0(){
+        BbBranch branch = api.getDefaultBranch("TESTP","empty-repo-test");
+        assertNull(branch);
+    }
+
+    @Test
+    public void testDefaultBranch5_6_0(){
+        BbBranch branch = api.getDefaultBranch("TESTP","empty1");
+        assertNull(branch);
     }
 
     @Test

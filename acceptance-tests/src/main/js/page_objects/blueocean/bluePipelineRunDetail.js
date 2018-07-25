@@ -54,7 +54,7 @@ module.exports = {
 
 module.exports.commands = [{
     /**
-     * Navigate to a certain detail page, calculated based on diferent params
+     * Navigate to a certain detail page, calculated based on different params
      *
      * @example
      *   const blueRunDetailPage = browser.page.bluePipelineRunDetail()
@@ -434,9 +434,8 @@ module.exports.commands = [{
    */
   clickReRunButton: function () {
     var self = this;
-    const browser = this.api;
-    self.waitForElementVisible('.replay-button');
-    self.click('.replay-button');
+    self.waitForElementVisible('.ResultPageHeader-run .replay-button');
+    self.click('.ResultPageHeader-run .replay-button');
     return self;
   }
 

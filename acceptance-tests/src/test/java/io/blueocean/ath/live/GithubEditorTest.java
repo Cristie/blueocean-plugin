@@ -1,6 +1,7 @@
 package io.blueocean.ath.live;
 
 import io.blueocean.ath.ATHJUnitRunner;
+import io.blueocean.ath.CustomJenkinsServer;
 import io.blueocean.ath.Login;
 import io.blueocean.ath.factory.MultiBranchPipelineFactory;
 import io.blueocean.ath.model.MultiBranchPipeline;
@@ -58,8 +59,11 @@ public class GithubEditorTest {
     @Inject
     WebDriver driver;
 
+    @Inject
+    CustomJenkinsServer jenkins;
+
     /**
-     * Cleans up repostory after the test has completed.
+     * Cleans up repository after the test has completed.
      *
      * @throws IOException
      */
@@ -123,16 +127,123 @@ public class GithubEditorTest {
         creationPage.createPipeline(token, organization, repo, true);
         MultiBranchPipeline pipeline = mbpFactory.pipeline(repo);
         editorPage.simplePipeline();
+        editorPage.saveBranch("master");
         ActivityPage activityPage = pipeline.getActivityPage().checkUrl();
         driver.navigate().refresh();
         sseClient.untilEvents(pipeline.buildsFinished);
         sseClient.clear();
         BranchPage branchPage = activityPage.clickBranchTab();
         branchPage.openEditor("master");
-        editorPage.saveBranch("new-branch");
+        editorPage.saveBranch("new - branch");
         activityPage.checkUrl();
         activityPage.getRunRowForBranch("new-branch");
-
         sseClient.untilEvents(pipeline.buildsFinished);
+    }
+
+    /**
+     * This test covers creation of a pipeline, and changes agent settings within it.
+     */
+    @Test
+    public void testEditorChangeAgentSetting() throws IOException {
+        String newBranchName = "made-by-testEditorChangeAgentSetting";
+        creationPage.createPipeline(token, organization, repo, true);
+        MultiBranchPipeline pipeline = mbpFactory.pipeline(repo);
+        editorPage.simplePipeline();
+        editorPage.saveBranch("master");
+        ActivityPage activityPage = pipeline.getActivityPage().checkUrl();
+        sseClient.untilEvents(pipeline.buildsFinished);
+        sseClient.clear();
+        BranchPage branchPage = activityPage.clickBranchTab();
+        branchPage.openEditor("master");
+        editorPage.setAgentLabel("none");
+        editorPage.saveBranch(newBranchName);
+        activityPage.checkUrl();
+        activityPage.getRunRowForBranch(newBranchName);
+        sseClient.untilEvents(pipeline.buildsFinished);
+    }
+
+    /**
+     * This test covers creation of a pipeline, and subsequently adds a
+     * stage within that same pipeline, then saves it to a new branch.
+     */
+    @Test
+    public void testEditorAddAndDeleteStage() throws IOException {
+        String firstBranchName = "branch-before-delete";
+        String secondBranchName = "branch-after-delete";
+        String stageToDelete = "stage to be deleted";
+        creationPage.createPipeline(token, organization, repo, true);
+        MultiBranchPipeline pipeline = mbpFactory.pipeline(repo);
+        editorPage.simplePipeline();
+        editorPage.saveBranch("master");
+        ActivityPage activityPage = pipeline.getActivityPage().checkUrl();
+        sseClient.untilEvents(pipeline.buildsFinished);
+        sseClient.clear();
+        BranchPage branchPage = activityPage.clickBranchTab();
+        branchPage.openEditor("master");
+        editorPage.addStageToPipeline(pipeline, stageToDelete);
+        editorPage.saveBranch(firstBranchName);
+        activityPage.checkUrl();
+        activityPage.getRunRowForBranch(firstBranchName);
+        sseClient.untilEvents(pipeline.buildsFinished);
+        sseClient.clear();
+        branchPage.open();
+        // The delete operations are here.
+        branchPage.openEditor(firstBranchName);
+        editorPage.deleteStage(stageToDelete);
+        editorPage.saveBranch(secondBranchName);
+        activityPage.checkUrl();
+        activityPage.getRunRowForBranch(secondBranchName);
+        sseClient.untilEvents(pipeline.buildsFinished);
+    }
+
+    /**
+     * This test covers creation of a pipeline, and adds an environment
+     * variable to it.
+     */
+    @Test
+    public void testEditorSetEnvironmentVariables() throws IOException {
+        String newBranchName = "made-by-testEditorSetEnvironmentVariables";
+        creationPage.createPipeline(token, organization, repo, true);
+        MultiBranchPipeline pipeline = mbpFactory.pipeline(repo);
+        editorPage.simplePipeline();
+        editorPage.saveBranch("master");
+        ActivityPage activityPage = pipeline.getActivityPage().checkUrl();
+        sseClient.untilEvents(pipeline.buildsFinished);
+        sseClient.clear();
+        BranchPage branchPage = activityPage.clickBranchTab();
+        branchPage.openEditor("master");
+        editorPage.setEnvironmentVariable("NY_NEW_VAR", "MY_NEW_VALUE");
+        editorPage.saveBranch(newBranchName);
+        activityPage.checkUrl();
+        activityPage.getRunRowForBranch(newBranchName);
+        sseClient.untilEvents(pipeline.buildsFinished);
+    }
+
+    /**
+     * Make sure we can paste a bad token that has whitespace added.
+     */
+    @Test
+    public void testEditorWithSpace() throws IOException {
+        // Gotta make Jenkins clear out its credential store or we might get a false positive depending on test order
+        jenkins.deleteUserDomainCredential("alice", "blueocean-github-domain", "github");
+        creationPage.createPipeline(" " + token + " ", organization, repo, false);
+    }
+
+    /**
+     * This test covers e2e usage of the editor. Does so with a parallel pipeline.
+     *
+     * Creates a blank github repo, and then uses editor to create a parallel pipeline.
+     */
+    @Test
+    public void testEditorParallel() throws IOException {
+        String branchNameForParallelPipeline = "branch-with-parallels";
+        creationPage.createPipeline(token, organization, repo, true);
+        MultiBranchPipeline pipeline = mbpFactory.pipeline(repo);
+        editorPage.parallelPipeline(4);
+        editorPage.saveBranch(branchNameForParallelPipeline);
+        ActivityPage activityPage = pipeline.getActivityPage().checkUrl();
+        sseClient.untilEvents(pipeline.buildsFinished);
+        sseClient.clear();
+        activityPage.getRunRowForBranch("branch-with-parallels");
     }
 }

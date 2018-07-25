@@ -9,15 +9,17 @@
     justify-content: center;
 
     .Alert {
-        min-width: 400px;
+        width: 400px;
+
         .title-div {
             align-items: flex-start;
             flex-direction: column;
+            padding: 14px 16px;
 
-            .title {
-                padding-left: 16px;
-                padding-top: 14px;
+            .title, .message {
+                padding-left: 0;
             }
+
             .message {
                 line-height: normal;
             }
@@ -28,6 +30,7 @@
     .inputBody {
         max-width: 400px;
         min-width: 400px;
+        white-space: pre-wrap;
 
         h3 {
             padding-bottom: 24px;
@@ -44,6 +47,11 @@
         .inputControl button {
             margin-top: 24px;
             margin-right: 8px;
+        }
+
+        .errorContainer {
+            margin-top: 10px;
+            color: @brand-danger;
         }
     }
 

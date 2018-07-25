@@ -5,6 +5,7 @@ import com.google.inject.assistedinject.AssistedInject;
 import io.blueocean.ath.BaseUrl;
 import io.blueocean.ath.WaitUtil;
 import io.blueocean.ath.factory.BranchPageFactory;
+import io.blueocean.ath.factory.PullRequestsPageFactory;
 import io.blueocean.ath.model.AbstractPipeline;
 import org.apache.log4j.Logger;
 import org.eclipse.jgit.annotations.Nullable;
@@ -32,6 +33,8 @@ public class ActivityPage {
 
     @Inject
     BranchPageFactory branchPageFactory;
+
+    @Inject PullRequestsPageFactory pullRequestsPageFactory;
 
     @Inject
     public ActivityPage(WebDriver driver) {
@@ -76,15 +79,26 @@ public class ActivityPage {
         return this;
     }
 
-    public void checkForCommitMesssage(String message) {
+    public void checkForCommitMessage(String message) {
         wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[text()=\"" + message + "\"]")));
         logger.info("Found commit message '" + message + "'");
     }
 
     public BranchPage clickBranchTab() {
-        wait.until(By.cssSelector("a.branches")).click();
+        wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("a.branches"))).click();
         logger.info("Clicked on branch tab");
-        return branchPageFactory.withPipeline(pipeline).checkUrl();
+        // return branchPageFactory.withPipeline(pipeline).checkUrl();
+        BranchPage page = branchPageFactory.withPipeline(pipeline);
+        Assert.assertNotNull("AbstractPipeline object is null", page);
+        return page.checkUrl();
+    }
+
+    public PullRequestsPage clickPullRequestsTab() {
+        wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("a.pr"))).click();
+        logger.info("Clicked on PR tab");
+        PullRequestsPage page = pullRequestsPageFactory.withPipeline(pipeline);
+        Assert.assertNotNull("AbstractPipeline object is null", page);
+        return page.checkUrl();
     }
 
     public By getSelectorForBranch(String branchName) {
@@ -105,8 +119,35 @@ public class ActivityPage {
     }
 
     public void testNumberRunsComplete(int atLeast) {
+        testNumberRunsComplete(atLeast, "success");
         By selector = By.cssSelector("div[data-pipeline='" + pipeline.getName() + "'].JTable-row circle.success");
         wait.until(ExpectedConditions.numberOfElementsToBeMoreThan(selector, atLeast - 1));
         logger.info("At least " + atLeast + " runs are complete");
+    }
+
+    public void testNumberRunsComplete(int atLeast, String status) {
+        By selector = By.cssSelector("div[data-pipeline='" + pipeline.getName() + "'].JTable-row circle."+status);
+        wait.until(ExpectedConditions.numberOfElementsToBeMoreThan(selector, atLeast - 1));
+        logger.info("At least " + atLeast + " runs are complete");
+    }
+
+    public void checkBasicDomElements() {
+        wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("article.activity")));
+        logger.info("checkBasicDomElements: Activity tab found");
+    }
+
+    public void checkFavoriteStatus(boolean isFavorited) {
+        wait.until(driver -> {
+            WebElement favorite = driver.findElement(By.cssSelector(".Favorite.Checkbox input"));
+            return isFavorited == favorite.isSelected();
+        });
+    }
+
+    public void toggleFavorite() {
+        wait.until(driver -> {
+            WebElement favorite = driver.findElement(By.cssSelector(".Favorite.Checkbox label"));
+            favorite.click();
+            return favorite;
+        });
     }
 }

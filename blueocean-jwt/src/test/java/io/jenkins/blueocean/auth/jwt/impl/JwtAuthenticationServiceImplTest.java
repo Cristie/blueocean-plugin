@@ -1,12 +1,10 @@
 package io.jenkins.blueocean.auth.jwt.impl;
 
 import com.gargoylesoftware.htmlunit.Page;
+import com.gargoylesoftware.htmlunit.util.Cookie;
 import hudson.model.User;
 import hudson.tasks.Mailer;
 import net.sf.json.JSONObject;
-import org.eclipse.jetty.security.HashLoginService;
-import org.eclipse.jetty.security.LoginService;
-import org.eclipse.jetty.util.security.Password;
 import org.jose4j.jwk.RsaJsonWebKey;
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
@@ -18,7 +16,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * @author Vivek Pandey
@@ -26,17 +28,7 @@ import java.util.Map;
 public class JwtAuthenticationServiceImplTest {
 
     @Rule
-    public JenkinsRule j = new JenkinsRule(){
-        @Override
-        protected LoginService configureUserRealm() {
-            HashLoginService realm = new HashLoginService();
-            realm.setName("default");   // this is the magic realm name to make it effective on everywhere
-            realm.update("alice", new Password("alice"), new String[]{"user","female"});
-            realm.update("bob", new Password("bob"), new String[]{"user","male"});
-            realm.update("charlie", new Password("charlie"), new String[]{"user","male"});
-            return realm;
-        }
-    };
+    public JenkinsRule j = new JenkinsRule();
 
     @Test
     public void getToken() throws Exception {
@@ -50,8 +42,7 @@ public class JwtAuthenticationServiceImplTest {
 
         webClient.login("alice");
 
-        Page page = webClient.goTo("jwt-auth/token/", null);
-        String token = page.getWebResponse().getResponseHeaderValue("X-BLUEOCEAN-JWT");
+        String token = getToken(webClient);
 
         Assert.assertNotNull(token);
 
@@ -69,7 +60,7 @@ public class JwtAuthenticationServiceImplTest {
 
         Assert.assertNotNull(kid);
 
-        page = webClient.goTo("jwt-auth/jwks/"+kid+"/", "application/json");
+        Page page = webClient.goTo("jwt-auth/jwks/"+kid+"/", "application/json");
 
 //        for(NameValuePair valuePair: page.getWebResponse().getResponseHeaders()){
 //            System.out.println(valuePair);
@@ -101,11 +92,8 @@ public class JwtAuthenticationServiceImplTest {
     @Test
     public void anonymousUserToken() throws Exception{
         j.jenkins.setSecurityRealm(j.createDummySecurityRealm());
-
         JenkinsRule.WebClient webClient = j.createWebClient();
-        Page page = webClient.goTo("jwt-auth/token/", null);
-        String token = page.getWebResponse().getResponseHeaderValue("X-BLUEOCEAN-JWT");
-
+        String token = getToken(webClient);
         Assert.assertNotNull(token);
 
 
@@ -120,7 +108,7 @@ public class JwtAuthenticationServiceImplTest {
 
         Assert.assertNotNull(kid);
 
-        page = webClient.goTo("jwt-auth/jwks/"+kid+"/", "application/json");
+        Page page = webClient.goTo("jwt-auth/jwks/"+kid+"/", "application/json");
 
 //        for(NameValuePair valuePair: page.getWebResponse().getResponseHeaders()){
 //            System.out.println(valuePair);
@@ -144,5 +132,19 @@ public class JwtAuthenticationServiceImplTest {
         Map<String,Object> context = (Map<String, Object>) claimMap.get("context");
         Map<String,String> userContext = (Map<String, String>) context.get("user");
         Assert.assertEquals("anonymous", userContext.get("id"));
+    }
+
+    // webclient has problems with pages returning 204, so we use HttpURLConnection directly to handle the token
+    private String getToken(JenkinsRule.WebClient webClient) throws IOException {
+        URL tokenUrl = new URL(webClient.getContextPath() + "jwt-auth/token/");
+        HttpURLConnection  connection = (HttpURLConnection) tokenUrl.openConnection();
+        Set<Cookie> cookies = webClient.getCookies(tokenUrl);
+        for (Cookie cookie : cookies) {
+            connection.addRequestProperty("Cookie", cookie.getName() + "=" + cookie.getValue());
+        }
+        Assert.assertEquals(connection.getResponseCode(), 204);
+        String token = connection.getHeaderField("X-BLUEOCEAN-JWT");
+        connection.disconnect();
+        return token;
     }
 }

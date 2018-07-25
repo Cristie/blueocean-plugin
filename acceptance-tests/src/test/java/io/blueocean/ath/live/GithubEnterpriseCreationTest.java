@@ -23,7 +23,7 @@ import java.io.IOException;
 
 @Login
 @RunWith(ATHJUnitRunner.class)
-public class GithubEnterpriseCreationTest extends WireMockBase {
+public class    GithubEnterpriseCreationTest extends WireMockBase {
 
     private GithubConfig config;
 
@@ -65,7 +65,7 @@ public class GithubEnterpriseCreationTest extends WireMockBase {
         String serverName = getServerNameUnique("My Server");
         String serverUrl = getServerUrl(mockServer);
 
-        creationPage.beginCreationFlow(config.getOrganization());
+        creationPage.beginCreationFlow(config.getRepository());
         creationPage.clickAddServerButton();
 
         // "empty form" validation
@@ -80,7 +80,7 @@ public class GithubEnterpriseCreationTest extends WireMockBase {
         dialog.clickSaveServerButton();
         dialog.findFormErrorMessage("Check hostname");
         // check GitHub server with invalid path
-        dialog.enterServerUrl("https://github.beescloud.com");
+        dialog.enterServerUrl("https://github.beescloud.com/login");
         dialog.waitForErrorMessagesGone();
         dialog.clickSaveServerButton();
         dialog.findFormErrorMessage("Check path");

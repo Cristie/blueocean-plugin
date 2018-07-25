@@ -1,5 +1,5 @@
 import React, { PropTypes } from 'react';
-import * as IconId from './material-ui/svg-icons';
+import * as IconId from '@jenkins-cd/blueocean-material-icons';
 
 export function Icon(props) {
     const ChildIcon = IconId[props.icon];
@@ -8,9 +8,7 @@ export function Icon(props) {
         return null;
     }
 
-    return (
-        <ChildIcon {...props} />
-    );
+    return <ChildIcon {...props} />;
 }
 
 Icon.propTypes = {

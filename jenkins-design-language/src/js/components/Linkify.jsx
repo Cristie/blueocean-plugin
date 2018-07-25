@@ -1,6 +1,7 @@
 // @flow
 
 import React from 'react';
+import { PropTypes } from 'react';
 import OriginalLinkify from 'linkifyjs/react';
 
 // Makes sure we only linkify explicit URLs with expected protocols
@@ -20,10 +21,9 @@ type Props = Object; // FIXME: How do we import the type of OriginalLinkify:prop
  * @param props
  */
 export const Linkify = (props: Props) => {
-
     const childOptions = {
         validate: validateURL,
-        ...(props.options || {})
+        ...(props.options || {}),
     };
 
     const childProps = {
@@ -31,10 +31,11 @@ export const Linkify = (props: Props) => {
         options: childOptions,
     };
 
-    return (
-        <OriginalLinkify {...childProps} />
-    );
+    return <OriginalLinkify {...childProps} />;
 };
 
-Linkify.propTypes = OriginalLinkify.propTypes;
+Linkify.propTypes = {
+    ...OriginalLinkify.propTypes,
+    options: PropTypes.object,
+};
 Linkify.defaultProps = OriginalLinkify.defaultProps;

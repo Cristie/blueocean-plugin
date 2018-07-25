@@ -3,8 +3,8 @@ import LngDetector from 'i18next-browser-languagedetector';
 import { store } from '@jenkins-cd/js-extensions';
 import XHR from 'i18next-xhr-backend';
 
-import urlConfig from '../urlconfig';
-import logging from '../logging';
+import { UrlConfig } from '../urlconfig';
+import { logging } from '../logging';
 import { Fetch } from '../fetch';
 
 const logger = logging.logger('io.jenkins.blueocean.i18n');
@@ -19,12 +19,12 @@ export const defaultLngDetector = new LngDetector(null, {
     lookupQuerystring: 'language',
     // Don't use the default (document.documentElement) because that can
     // trigger the browsers auto-translate, which is quite annoying.
-    htmlTag: (window.document ? window.document.head : undefined),
+    htmlTag: window.document ? window.document.head : undefined,
 });
-const prefix = urlConfig.getJenkinsRootURL() || '';
+const prefix = UrlConfig.getJenkinsRootURL() || '';
 const FALLBACK_LANG = '';
 
-function newPluginXHR(pluginName, onLoad) {
+function newPluginXHR(pluginName) {
     let pluginVersion = store.getPluginVersion(pluginName);
 
     if (!pluginVersion) {
@@ -42,33 +42,13 @@ function newPluginXHR(pluginName, onLoad) {
             if (logger.isDebugEnabled()) {
                 logger.debug('loading data for', url);
             }
-            let status;
-            // eslint-disable-next-line
-            return Fetch.fetch(url, { disableLoadingIndicator: true, ignoreRefreshHeader: true })
-                .then(response => {
-                    // i18n xhr-backend needs the status
-                    status = response.status;
-                    // now return the raw data
-                    return response.text();
-                })
-                .then((data) => {
-                    if (callback) {
-                        const xhr = { status };
-                        if (logger.isDebugEnabled()) {
-                            logger.debug('calling now callback with xhr and data', xhr, data);
-                        }
-                        callback(data, xhr);
-                    }
-                });
+            Fetch.fetchJSON(url, { disableCapabilites: true, disableLoadingIndicator: true, ignoreRefreshHeader: true }).then(data => {
+                callback(data, { status: 200 });
+            });
         },
-        parse: (data) => {
-            // we need to parse the response and then extract the data since the rest is garbage for us
-            const response = JSON.parse(data);
+        parse: response => {
             if (logger.isDebugEnabled()) {
                 logger.debug('Received i18n resource bundle for plugin "%s".', pluginName, response.data);
-            }
-            if (typeof onLoad === 'function') {
-                onLoad();
             }
             return response.data;
         },
@@ -90,7 +70,8 @@ const i18nextInstance = (backend, lngDetector = defaultLngDetector, options) => 
     if (!options) {
         throw new Error('Invalid call to create a new i18next instance. No i18next options supplied.');
     }
-    return i18next.createInstance()
+    return i18next
+        .createInstance()
         .use(backend)
         .use(lngDetector)
         .init(options);
@@ -99,13 +80,13 @@ const i18nextInstance = (backend, lngDetector = defaultLngDetector, options) => 
 const translatorCache = {};
 let useMockFallback = false;
 
-const assertPluginNameDefined = (pluginName) => {
+const assertPluginNameDefined = pluginName => {
     if (!pluginName) {
         throw new Error('"pluginName" arg cannot be null/blank');
     }
 };
 
-const toDefaultNamespace = (pluginName) => {
+const toDefaultNamespace = pluginName => {
     assertPluginNameDefined(pluginName);
     // Replace all hyphen chars with a dot.
     return `jenkins.plugins.${pluginName.replace(/-/g, '.')}.Messages`;
@@ -121,7 +102,7 @@ const toDefaultNamespace = (pluginName) => {
  * for the "blueocean-dashboard" plugin.
  * @return An i18n instance.
  */
-const pluginI18next = (pluginName, namespace = toDefaultNamespace(pluginName), onLoad = undefined) => {
+const pluginI18next = (pluginName, namespace = toDefaultNamespace(pluginName)) => {
     assertPluginNameDefined(pluginName);
 
     const initOptions = {
@@ -138,7 +119,7 @@ const pluginI18next = (pluginName, namespace = toDefaultNamespace(pluginName), o
         },
     };
 
-    return i18nextInstance(newPluginXHR(pluginName, onLoad), defaultLngDetector, initOptions);
+    return i18nextInstance(newPluginXHR(pluginName), defaultLngDetector, initOptions);
 };
 
 function buildCacheKey(pluginName, namespace = toDefaultNamespace(pluginName)) {
@@ -155,7 +136,7 @@ function buildCacheKey(pluginName, namespace = toDefaultNamespace(pluginName)) {
  * for the "blueocean-dashboard" plugin.
  * @return An i18n Translator instance.
  */
-export default function i18nTranslator(pluginName, namespace, onLoad) {
+export function i18nTranslator(pluginName, namespace, onLoad) {
     assertPluginNameDefined(pluginName);
 
     const translatorCacheKey = buildCacheKey(pluginName, namespace);
@@ -175,7 +156,10 @@ export default function i18nTranslator(pluginName, namespace, onLoad) {
         }
 
         if (!translator) {
-            const I18n = pluginI18next(pluginName, namespace, onLoad);
+            const I18n = pluginI18next(pluginName, namespace);
+            if (typeof onLoad === 'function') {
+                I18n.on('loaded', onLoad);
+            }
 
             // Create and cache the translator instance.
             let detectedLang;
@@ -190,7 +174,7 @@ export default function i18nTranslator(pluginName, namespace, onLoad) {
             }
 
             const fixedT = I18n.getFixedT(detectedLang, namespace);
-            translator = function (i18nKey, i18nParams) {
+            translator = function _translate(i18nKey, i18nParams) {
                 const normalizedKey = i18nKey.replace(/[\W]/g, '.');
                 let passedParams = i18nParams;
                 if (normalizedKey !== i18nKey) {
@@ -223,4 +207,3 @@ export function enableMocksForI18n() {
 export function disableMocksForI18n() {
     useMockFallback = false;
 }
-

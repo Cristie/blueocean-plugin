@@ -2,12 +2,11 @@ import React, { Component, PropTypes } from 'react';
 import { FileSize, JTable, TableRow, TableCell, TableHeaderRow } from '@jenkins-cd/design-language';
 import { Icon } from '@jenkins-cd/design-language';
 import { observer } from 'mobx-react';
-import mobxUtils from 'mobx-utils';
-import { logging, UrlConfig } from '@jenkins-cd/blueocean-core-js';
+import { logging, UrlConfig, ShowMoreButton } from '@jenkins-cd/blueocean-core-js';
 
 const logger = logging.logger('io.jenkins.blueocean.dashboard.artifacts');
 
-const ZipFileDownload = (props) => {
+const ZipFileDownload = props => {
     const { zipFile, t } = props;
     if (!zipFile) {
         return null;
@@ -16,36 +15,19 @@ const ZipFileDownload = (props) => {
     const title = t('rundetail.artifacts.button.downloadAll.title', { defaultValue: 'Download all artifact as zip' });
     const href = `${UrlConfig.getJenkinsRootURL()}${zipFile}`;
 
-    return (<div className="downloadAllArtifactsButton">
-        <a className="btn-secondary" target="_blank" title={title} href={href}>
-            {t('rundetail.artifacts.button.downloadAll.text', { defaultValue: 'Download All' })}
-        </a>
-    </div>);
+    return (
+        <div className="downloadAllArtifactsButton">
+            <a className="btn-secondary" target="_blank" title={title} href={href}>
+                {t('rundetail.artifacts.button.downloadAll.text', { defaultValue: 'Download All' })}
+            </a>
+        </div>
+    );
 };
 
 ZipFileDownload.propTypes = {
     zipFile: PropTypes.string,
     t: PropTypes.func,
 };
-
-
-function ArtifactListingLimited(props) {
-    const { t } = props;
-
-    return (
-        <div className="artifacts-info-container">
-            <div className="artifacts-info">
-                <h1 className="title">{t('rundetail.artifacts.limit_title')}</h1>
-                <p className="message">{t('rundetail.artifacts.limit_message')}</p>
-            </div>
-        </div>
-    );
-}
-
-ArtifactListingLimited.propTypes = {
-    t: PropTypes.func,
-};
-
 
 /**
  * Displays a list of artifacts from the supplied build run property.
@@ -69,30 +51,25 @@ export default class RunDetailsArtifacts extends Component {
         if (!result) {
             return;
         }
-        this.artifactsPromise = this.context.activityService.fetchArtifacts(result._links.self.href);
+        this.pager = this.context.activityService.artifactsPager(result._links.self.href);
     }
 
     render() {
         const { result, t } = this.props;
 
-        const promise = this.artifactsPromise;
-        if (!result || !promise || promise.state === mobxUtils.PENDING || promise.state === mobxUtils.REJECTED) {
+        if (!result || !this.pager || this.pager.pendingD) {
             return null;
         }
 
         const { artifactsZipFile: zipFile } = result;
-        const artifacts = promise.value;
+        const artifacts = this.pager.data;
 
         const nameLabel = t('rundetail.artifacts.header.name', { defaultValue: 'Name' });
         const sizeLabel = t('rundetail.artifacts.header.size', { defaultValue: 'Size' });
         const downloadLabel = t('rundetail.artifacts.button.download', { defaultValue: 'Download the artifact' });
         const openLabel = t('rundetail.artifacts.button.open', { defaultValue: 'Open the artifact' });
 
-        const columns = [
-            JTable.column(500, nameLabel, true),
-            JTable.column(120, sizeLabel),
-            JTable.column(50, ''),
-        ];
+        const columns = [JTable.column(500, nameLabel, true), JTable.column(120, sizeLabel), JTable.column(50, '')];
 
         const rootURL = UrlConfig.getJenkinsRootURL();
 
@@ -104,17 +81,13 @@ export default class RunDetailsArtifacts extends Component {
             let downloadLink = null;
             if (artifact.downloadable) {
                 downloadLink = (
-                    <a target="_blank"
-                       className="action-button-colors"
-                       download={fileName} title={downloadLabel}
-                       href={`${rootURL}${artifact.url}`}
-                    >
+                    <a target="_blank" className="action-button-colors" download={fileName} title={downloadLabel} href={`${rootURL}${artifact.url}`}>
                         <Icon icon="FileFileDownload" color="rgba(53, 64, 82, 0.25)" />
                     </a>
                 );
             }
 
-            const artifactSize = artifact.size >= 0 ? (<FileSize bytes={artifact.size} />) : (<span>–</span>);
+            const artifactSize = artifact.size >= 0 ? <FileSize bytes={artifact.size} /> : <span>–</span>;
 
             return (
                 <TableRow key={artifact.url}>
@@ -123,12 +96,8 @@ export default class RunDetailsArtifacts extends Component {
                             {artifact.path}
                         </a>
                     </TableCell>
-                    <TableCell>
-                        {artifactSize}
-                    </TableCell>
-                    <TableCell className="TableCell--actions">
-                        {downloadLink}
-                    </TableCell>
+                    <TableCell>{artifactSize}</TableCell>
+                    <TableCell className="TableCell--actions">{downloadLink}</TableCell>
                 </TableRow>
             );
         });
@@ -138,7 +107,6 @@ export default class RunDetailsArtifacts extends Component {
 
         return (
             <div>
-                { artifacts.length > 100 && <ArtifactListingLimited t={t} /> }
                 <JTable columns={columns} className="artifacts-table">
                     <TableHeaderRow />
                     <TableRow>
@@ -154,8 +122,9 @@ export default class RunDetailsArtifacts extends Component {
                             </a>
                         </TableCell>
                     </TableRow>
-                    { artifactsRendered }
+                    {artifactsRendered}
                 </JTable>
+                <ShowMoreButton pager={this.pager} />
                 <ZipFileDownload zipFile={zipFile} t={t} />
             </div>
         );

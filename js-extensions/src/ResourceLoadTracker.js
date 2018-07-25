@@ -34,7 +34,7 @@ export default class ResourceLoadTracker {
         this.activeCSSs = {};
 
         // Iterate through each plugin /jenkins-js-extension.json
-        for(var i1 = 0; i1 < extensionPointList.length; i1++) {
+        for (var i1 = 0; i1 < extensionPointList.length; i1++) {
             var pluginMetadata = extensionPointList[i1];
             var extensions = pluginMetadata.extensions; // All the extensions defined on the plugin
             var pluginCSS = pluginMetadata.extensionCSS; // The plugin CSS URL (adjunct URL).
@@ -50,10 +50,10 @@ export default class ResourceLoadTracker {
                 }
 
                 // Add the plugin CSS if it's not already in the list.
-                if (pointCSS.filter((pluginCSSEntry) => pluginCSSEntry.url === pluginCSS).length === 0) {
+                if (pointCSS.filter(pluginCSSEntry => pluginCSSEntry.url === pluginCSS).length === 0) {
                     pointCSS.push({
                         url: pluginCSS,
-                        hpiPluginId: pluginMetadata.hpiPluginId
+                        hpiPluginId: pluginMetadata.hpiPluginId,
                     });
                 }
             }
@@ -69,12 +69,15 @@ export default class ResourceLoadTracker {
      *
      * @param extensionPointName The extension point name.
      */
-    onMount(extensionPointName) {
+    onMount(extensionPointName, onload) {
+        if (!onload) throw new Error('parameter: onload is required');
         const pointCSS = this.pointCSSs[extensionPointName];
         if (pointCSS) {
             for (var i = 0; i < pointCSS.length; i++) {
-                this._requireCSS(pointCSS[i]);
+                this._requireCSS(pointCSS[i], onload);
             }
+        } else {
+            onload();
         }
     }
 
@@ -96,10 +99,12 @@ export default class ResourceLoadTracker {
         }
     }
 
-    _requireCSS(pluginCSS) {
+    _requireCSS(pluginCSS, onload) {
         if (!this.activeCSSs[pluginCSS.url]) {
-            this._addCSS(pluginCSS);
+            this._addCSS(pluginCSS, onload);
             this.activeCSSs[pluginCSS.url] = true;
+        } else {
+            onload();
         }
     }
 
@@ -123,9 +128,17 @@ export default class ResourceLoadTracker {
         }
     }
 
-    _addCSS(pluginCSS) {
+    _addCSS(pluginCSS, onload) {
         const cssURL = getPluginCSSURL(pluginCSS);
         jsModules.addCSSToPage(cssURL);
+
+        const linkElId = jsModules.toCSSId(cssURL);
+        const linkEl = document.getElementById(linkElId);
+        if (linkEl) {
+            linkEl.onload = onload;
+        } else {
+            onload();
+        }
     }
 
     _removeCSS(pluginCSS) {

@@ -2,6 +2,7 @@
 
 import idgen from './IdGenerator';
 import type { PipelineKeyValuePair } from './PipelineSyntaxConverter';
+import { DragPosition } from '../components/editor/DragPosition';
 
 /**
  * A stage in a pipeline
@@ -9,15 +10,17 @@ import type { PipelineKeyValuePair } from './PipelineSyntaxConverter';
 export type StageInfo = {
     name: string,
     id: number,
-    children: Array<StageInfo|UnknownSection>,
+    children: Array<StageInfo | UnknownSection>,
     steps: StepInfo[],
     environment: EnvironmentEntryInfo[],
     agent: StepInfo,
 };
 
-export type EnvironmentEntryInfo = PipelineKeyValuePair | {
-    id: number,
-};
+export type EnvironmentEntryInfo =
+    | PipelineKeyValuePair
+    | {
+          id: number,
+      };
 
 /**
  * An individual step within a single pipeline stage
@@ -26,7 +29,7 @@ export type StepInfo = {
     id: number,
     name: string,
     label: string,
-    isContainer: bool,
+    isContainer: boolean,
     children: StepInfo[],
     data: any,
 };
@@ -50,7 +53,7 @@ function _copy<T>(obj: T): ?T {
     return JSON.parse(JSON.stringify(obj));
 }
 
-function createStage(name:string):StageInfo {
+function createStage(name: string): StageInfo {
     return {
         name,
         agent: {
@@ -66,7 +69,7 @@ function createStage(name:string):StageInfo {
 /**
  * Search through candidates (and their children, recursively) to see if any is the parent of the stage
  */
-function findParentStage(container:StageInfo, childStage:StageInfo, safetyValve:number = 5):?StageInfo {
+function findParentStage(container: StageInfo, childStage: StageInfo, safetyValve: number = 5): ?StageInfo {
     // TODO: TESTS
     if (!container || !container.children || container.children.length == 0 || safetyValve < 1) {
         return null;
@@ -87,7 +90,7 @@ function findParentStage(container:StageInfo, childStage:StageInfo, safetyValve:
     return null;
 }
 
-const findStepById = function (steps, id) {
+const findStepById = function(steps, id) {
     const step = steps.filter(i => i.id === id);
     if (step.length) {
         return step[0];
@@ -109,7 +112,7 @@ const findStepById = function (steps, id) {
  * Returns the stage that contains the provided step or undefined
  * if none found
  */
-const findStageByStep = function (stage, step) {
+const findStageByStep = function(stage, step) {
     // Does this stage contain this step directly?
     if (stage.steps && stage.steps.length > 0) {
         for (const s of stage.steps) {
@@ -135,7 +138,7 @@ const findStageByStep = function (stage, step) {
     }
 };
 
-const findParentStepByChild = function (steps, childStep) {
+const findParentStepByChild = function(steps, childStep) {
     for (let s of steps) {
         if (s.isContainer) {
             const children = s.children;
@@ -161,7 +164,7 @@ const STAGE_NO_COPY_KEYS = ['id', 'name'];
  * @param fromStage
  * @param toStage
  */
-const moveStageProperties = function (fromStage, toStage) {
+const moveStageProperties = function(fromStage, toStage) {
     for (const key of Object.keys(fromStage)) {
         if (STAGE_NO_COPY_KEYS.indexOf(key) === -1) {
             toStage[key] = fromStage[key];
@@ -175,7 +178,7 @@ class PipelineStore {
     pipeline: StageInfo;
     listeners: Function[] = [];
 
-    createSequentialStage(name:string) {
+    createSequentialStage(name: string) {
         const { pipeline } = this;
 
         let newStage = createStage(name);
@@ -186,7 +189,7 @@ class PipelineStore {
         return newStage;
     }
 
-    createParallelStage(name:string, parentStage:StageInfo) {
+    createParallelStage(name: string, parentStage: StageInfo) {
         let updatedChildren = [...parentStage.children]; // Start with a shallow copy, we'll add one or two to this
 
         let newStage = createStage(name);
@@ -228,6 +231,28 @@ class PipelineStore {
     }
 
     /**
+     * Return an array that starts at the specified step and includes all ancestor steps.
+     * @param childStep
+     * @param steps
+     * @returns {[]}
+     */
+    findStepHierarchy(childStep: StepInfo, steps) {
+        const ancestors = [childStep];
+
+        let nextStep = childStep;
+
+        while (nextStep) {
+            nextStep = findParentStepByChild(steps, nextStep);
+
+            if (nextStep) {
+                ancestors.push(nextStep);
+            }
+        }
+
+        return ancestors;
+    }
+
+    /**
      * Delete the selected stage from our stages list. When this leaves a single-branch of parallel jobs, the steps
      * will be moved to the parent stage, and the lone parallel branch will be deleted.
      *
@@ -235,7 +260,7 @@ class PipelineStore {
      *      * The Graph is valid, and contains selectedStage
      *      * Only top-level stages can have children (ie, graph is max depth of 2).
      */
-    deleteStage(stage:StageInfo) {
+    deleteStage(stage: StageInfo) {
         const parentStage = this.findParentStage(stage) || this.pipeline;
 
         // For simplicity we'll just copy the stages list and then mutate it
@@ -251,6 +276,7 @@ class PipelineStore {
             let onlyChild = newChildren[0];
             newChildren = [];
             moveStageProperties(onlyChild, parentStage);
+            parentStage.name = onlyChild.name;
         }
 
         // Update the parent with new children list
@@ -267,13 +293,13 @@ class PipelineStore {
         const oldStepsForStage = selectedStage.steps || [];
         let newStepsForStage = oldStepsForStage;
 
-        let newStep:StepInfo = {
+        let newStep: StepInfo = {
             id: idgen.next(),
             isContainer: step.isBlockContainer,
             children: [],
             name: step.functionName,
             label: step.displayName,
-            data: {}
+            data: {},
         };
 
         if (parentStep != null) {
@@ -281,12 +307,10 @@ class PipelineStore {
             if (parent) {
                 parent.children = parent.children || [];
                 parent.children.push(newStep);
-            }
-            else {
+            } else {
                 throw new Error('unable to find step: ' + parentStep.id);
             }
-        }
-        else {
+        } else {
             newStepsForStage = [...oldStepsForStage, newStep];
         }
 
@@ -295,7 +319,7 @@ class PipelineStore {
         return newStep;
     }
 
-    deleteStep(step:StepInfo) {
+    deleteStep(step: StepInfo) {
         const selectedStage = findStageByStep(this.pipeline, step);
         const oldStepsForStage = selectedStage.steps || [];
         let newStepsForStage = oldStepsForStage;
@@ -309,28 +333,71 @@ class PipelineStore {
                 return;
             }
 
-            parent.children = [
-                ...(parent.children.slice(0, stepIdx)),
-                ...(parent.children.slice(stepIdx + 1))
-            ];
+            parent.children = [...parent.children.slice(0, stepIdx), ...parent.children.slice(stepIdx + 1)];
 
             newSelectedStep = parent;
-        }
-        else { // no parent
+        } else {
+            // no parent
             const stepIdx = oldStepsForStage.indexOf(step);
 
             if (stepIdx < 0) {
                 return;
             }
 
-            selectedStage.steps = [
-                ...(oldStepsForStage.slice(0, stepIdx)),
-                ...(oldStepsForStage.slice(stepIdx + 1))
-            ];
+            selectedStage.steps = [...oldStepsForStage.slice(0, stepIdx), ...oldStepsForStage.slice(stepIdx + 1)];
 
             let newSelectedStepIdx = Math.min(stepIdx, newStepsForStage.length - 1);
             newSelectedStep = newStepsForStage[newSelectedStepIdx];
         }
+        this.notify();
+    }
+
+    /**
+     * Moves a step to a different location in the same stage.
+     * Does not support movement across stages.
+     *
+     * @param stage
+     * @param sourceNodeId 'id' value of step to move
+     * @param targetNodeId 'id' value of target
+     * @param targetType BEFORE_ITEM, AFTER_ITEM, FIRST_CHILD, LAST_CHILD
+     */
+    moveStep(stage, sourceNodeId, targetNodeId, targetType) {
+        if (sourceNodeId === targetNodeId) {
+            return;
+        }
+
+        const sourceStep = findStepById(stage.steps, sourceNodeId);
+        const targetStep = findStepById(stage.steps, targetNodeId);
+
+        // remove the step from wherever it was before
+        const sourceParentStep = this.findParentStep(sourceStep);
+        const sourceArray = sourceParentStep ? sourceParentStep.children : stage.steps;
+        sourceArray.splice(sourceArray.indexOf(sourceStep), 1);
+
+        // insert the step in the right spot based on where they dragged
+        if (targetType === DragPosition.FIRST_CHILD || targetType === DragPosition.LAST_CHILD) {
+            // if the targetNodeId didn't resolve to a targetStep, then use stage as the target
+            const targetArray = targetStep ? targetStep.children : stage.steps;
+            if (targetType === DragPosition.FIRST_CHILD) {
+                targetArray.splice(0, 0, sourceStep);
+            } else {
+                targetArray.push(sourceStep);
+            }
+        } else if (targetType === DragPosition.BEFORE_ITEM || targetType === DragPosition.AFTER_ITEM) {
+            const targetParentStep = this.findParentStep(targetStep);
+            // if the target step has no parent step, it's at the stage level
+            const targetArray = !targetParentStep ? stage.steps : targetParentStep.children;
+            let targetIndex = targetArray.indexOf(targetStep);
+
+            if (targetType === DragPosition.BEFORE_ITEM) {
+                targetArray.splice(targetIndex, 0, sourceStep);
+            } else {
+                targetArray.splice(targetIndex + 1, 0, sourceStep);
+            }
+        } else {
+            console.warn(`targetType=${targetType} not implemented`);
+        }
+
         this.notify();
     }
 

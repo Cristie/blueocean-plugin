@@ -1,14 +1,13 @@
 import React, { Component, PropTypes } from 'react';
 import { Alerts, Dialog } from '@jenkins-cd/design-language';
-import Markdown from 'react-remarkable';
 
-import { buildClassicBuildUrl, capable, RunButtonBase as RunButton, ToastUtils } from '../index';
+import { UrlBuilder, capable, RunButtonBase as RunButton, ToastUtils } from '../index';
 
-import i18nTranslator from '../i18n/i18n';
+import { i18nTranslator } from '../i18n/i18n';
 
 import { ParameterApi as parameterApi, ParameterService, ParametersRender, supportedInputTypesMapping } from './index';
 
-import logging from '../logging';
+import { logging } from '../logging';
 const logger = logging.logger('io.jenkins.blueocean.core.ParametersRunButton');
 
 /**
@@ -27,7 +26,6 @@ const MULTIBRANCH_PIPELINE = 'io.jenkins.blueocean.rest.model.BlueMultiBranchPip
  * and further in './parameter/commonProptypes' you need to include the new type in the oneOf array.
  */
 export class ParametersRunButton extends Component {
-
     constructor(props) {
         super(props);
         if (props.runnable && props.runnable.parameters) {
@@ -50,9 +48,13 @@ export class ParametersRunButton extends Component {
      * react life cycle mapper to invoke the update of the service
      */
     componentWillReceiveProps(nextProps) {
-        if (nextProps.runnable && nextProps.runnable.parameters &&
-            this.props.runnable && this.props.runnable.parameters &&
-            nextProps.runnable.parameters !== this.props.runnable.parameters) {
+        if (
+            nextProps.runnable &&
+            nextProps.runnable.parameters &&
+            this.props.runnable &&
+            this.props.runnable.parameters &&
+            nextProps.runnable.parameters !== this.props.runnable.parameters
+        ) {
             this.parameterService.init(nextProps.runnable.parameters);
         }
     }
@@ -64,7 +66,11 @@ export class ParametersRunButton extends Component {
         const { runnable } = props;
         if (runnable) {
             const { config = {} } = this.context;
-            const { _links: { self: { href } } } = runnable;
+            const {
+                _links: {
+                    self: { href },
+                },
+            } = runnable;
             this.setState({
                 href: `${config._rootURL}${href}/runs/`,
                 visible: false,
@@ -88,11 +94,9 @@ export class ParametersRunButton extends Component {
      */
     initializeBuild() {
         const parameters = this.parameterService.parametersToSubmitArray();
-        parameterApi.startRunWithParameters(this.state.href, parameters)
-            .then((run) => {
-                ToastUtils
-                  .createRunStartedToast(this.props.runnable, run, this.props.onNavigation);
-            });
+        parameterApi.startRunWithParameters(this.state.href, parameters).then(run => {
+            ToastUtils.createRunStartedToast(this.props.runnable, run, this.props.onNavigation);
+        });
         return this.hide();
     }
 
@@ -104,12 +108,16 @@ export class ParametersRunButton extends Component {
         const ok = t('parametrised.pipeline.submit', { defaultValue: 'Run' });
         const cancelCaption = t('parametrised.pipeline.cancel', { defaultValue: 'Cancel' });
         // buttons
-        const cancelButton = (<button title={cancelCaption} onClick={() => this.hide()} className="btn inputStepCancel run-button btn-secondary" >
-            <span className="button-label">{cancelCaption}</span>
-        </button>);
-        const okButton = (<button title={ok} onClick={() => this.initializeBuild()} className="btn inputStepSubmit" >
-            <span className="button-label">{ok}</span>
-        </button>);
+        const cancelButton = (
+            <button title={cancelCaption} onClick={() => this.hide()} className="btn inputStepCancel run-button btn-secondary">
+                <span className="button-label">{cancelCaption}</span>
+            </button>
+        );
+        const okButton = (
+            <button title={ok} onClick={() => this.initializeBuild()} className="btn inputStepSubmit">
+                <span className="button-label">{ok}</span>
+            </button>
+        );
         // common run properties
         const runButtonProps = { ...this.props };
         // when we have build parameters we need to show them before trigger a build
@@ -123,47 +131,37 @@ export class ParametersRunButton extends Component {
         if (isMultiBranch) {
             pipe.fullName += `/${pipe.branch}`;
         }
-        const classicBuildUrl = buildClassicBuildUrl(pipe);
+        const classicBuildUrl = UrlBuilder.buildClassicBuildUrl(pipe);
         const sanity = parameters.filter(parameter => supportedInputTypesMapping[parameter.type] !== undefined);
         logger.debug('sane?', sanity.length === parameters.length, 'classicBuildUrl: ', classicBuildUrl);
         let dialog;
         if (sanity.length !== parameters.length) {
             logger.debug('sanity check failed. Returning Alert instead of the form.');
-            const alertCaption = (<Markdown>
-                {t('inputParameter.error.message', {
-                    0: classicBuildUrl,
-                    defaultValue: 'This pipeline uses input types that are unsupported. Use [Jenkins Classic]({0}) to resolve parametrized build',
-                })}
-            </Markdown>);
+            const alertCaption = [
+                <p>{t('inputParameter.error.message')}</p>,
+                <a href={classicBuildUrl} target="_blank">
+                    {t('inputParameter.error.linktext')}
+                </a>,
+            ];
             const alertTitle = t('inputParameter.error.title', { defaultValue: 'Error' });
-            dialog = (<Dialog
-                onDismiss={this.hide.bind(this)}
-                title={message}
-                className="Dialog--input"
-            >
-                <Alerts message={alertCaption} type="Error" title={alertTitle} />
-            </Dialog>);
+            dialog = (
+                <Dialog onDismiss={this.hide.bind(this)} title={message} className="Dialog--input">
+                    <Alerts message={alertCaption} type="Error" title={alertTitle} />
+                </Dialog>
+            );
         } else {
-            dialog = (<Dialog
-                buttons={[okButton, cancelButton]}
-                onDismiss={this.hide.bind(this)}
-                title={message}
-                className="Dialog--input Dialog--medium-size"
-            >
-                <ParametersRender
-                    parameters={parameters}
-                    onChange={(index, newValue) => this.parameterService.changeParameter(index, newValue) }
-                />
-            </Dialog>);
+            dialog = (
+                <Dialog buttons={[okButton, cancelButton]} onDismiss={this.hide.bind(this)} title={message} className="Dialog--input Dialog--medium-size">
+                    <ParametersRender parameters={parameters} onChange={(index, newValue) => this.parameterService.changeParameter(index, newValue)} />
+                </Dialog>
+            );
         }
-        return (<div className="ParametersRunButton">
-            <RunButton {...runButtonProps} />
-            { this.state.visible &&
-                <div className="inputParameters">
-                    { dialog }
-                </div>
-            }
-        </div>);
+        return (
+            <div className="ParametersRunButton">
+                <RunButton {...runButtonProps} />
+                {this.state.visible && <div className="inputParameters">{dialog}</div>}
+            </div>
+        );
     }
 }
 

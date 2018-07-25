@@ -1,5 +1,8 @@
 "use strict";
 
+process.env.SKIP_BLUE_IMPORTS = 'YES';
+process.env.NODE_ENV = 'production';
+
 /*
  Build file for Jenkins Design Language theme.
  */
@@ -10,20 +13,21 @@ const fs = require('fs');
 const sourcemaps = require('gulp-sourcemaps');
 const babel = require('gulp-babel');
 const less = require('gulp-less');
-const clean = require('gulp-clean');
-const runSequence = require('run-sequence');
 const rename = require('gulp-rename');
 const copy = require('gulp-copy');
 const svgmin = require('gulp-svgmin');
 const lint = require('gulp-eslint');
-const jest = require('gulp-jest').default;
-const minimist = require('minimist');
-
+const ts = require('gulp-typescript');
+const tsProject = ts.createProject('./tsconfig.json');
 // Options, src/dest folders, etc
 
 const config = {
     react: {
         sources: "src/**/*.{js,jsx}",
+        dest: "dist"
+    },
+    ts: {
+        sources: "src/**/*.{ts,tsx}",
         dest: "dist"
     },
     less: {
@@ -42,7 +46,7 @@ const config = {
         },
         octicons: {
             sources: "node_modules/octicons/build/font/octicons.{eot,woff,woff2,ttf,svg}",
-            dest: "dist/assets/css/"
+            dest: "target/classes/io/jenkins/blueocean/"
         },
         fonts: {
             sources: "fonts/*.woff",
@@ -61,109 +65,31 @@ const config = {
             dest: "licenses/"
         }
     },
-    clean: ["dist", "licenses", "reports"],
     test: {
-        sources: '.',
-        match: ['**/?(*-)(spec|test).js?(x)'],
-        reports: 'target/jest-reports/junit.xml',
-        coverage: 'target/jest-coverage',
-        coveragePathIgnorePatterns: ['/material-ui/']
+        sources: 'test/js',
     },
 };
 
 // Watch all
 
-gulp.task("watch", ["clean-build"], () => {
+gulp.task("watch", ["build"], () => {
    gulp.watch(config.react.sources, ["compile-react"]);
    gulp.watch(config.less.watch, ["less"]);
 });
 
 // Watch only styles, for when you're using Storybook
 
-gulp.task("watch-styles", ["clean-build"], () => {
+gulp.task("watch-styles", ["build"], () => {
    gulp.watch(config.less.watch, ["less"]);
 });
 
 // Default to all
 
-gulp.task("default", () =>
-    runSequence("clean", "lint", "test", "build", "validate"));
-
-// Clean and build only, for watching
-
-gulp.task("clean-build", () =>
-    runSequence("clean", "build", "validate"));
-
-// Clean
-
-gulp.task("clean", () =>
-    gulp.src(config.clean, {read: false})
-        .pipe(clean()));
-
-// Testing
-
-gulp.task("lint", () => (
-    gulp.src([config.react.sources, config.test.sources])
-        .pipe(lint())
-        .pipe(lint.format())
-        .pipe(lint.failAfterError())
-));
-
-gulp.task("test", ['test-jest']);
-
-gulp.task("test-debug", ['test-jest-debug']);
-
-gulp.task("test-fast", ['test-jest-fast']);
-
-function runJest(options) {
-    const argv = minimist(process.argv.slice(2));
-    options.testPathPattern = argv.test || null;
-
-    return gulp.src(config.test.sources)
-        .pipe(jest(options))
-        .on('error', () => {
-            process.exit(1);
-        });
-}
-
-gulp.task('test-jest', () => {
-    if (!process.env.JEST_JUNIT_OUTPUT) {
-        process.env.JEST_JUNIT_OUTPUT = config.test.reports;
-    }
-
-    return runJest({
-        config: {
-            collectCoverage: true,
-            coverageDirectory: config.test.coverage,
-            coveragePathIgnorePatterns: config.test.coveragePathIgnorePatterns,
-            testMatch: config.test.match,
-            testResultsProcessor: 'jest-junit',
-        },
-    });
-});
-
-gulp.task('test-jest-fast', () =>
-    runJest({
-        forceExit: true,
-        config: {
-            testMatch: config.test.match,
-        },
-    })
-);
-
-gulp.task('test-jest-debug', () =>
-    runJest({
-        runInBand: true,
-        forceExit: true,
-        config: {
-            testMatch: config.test.match,
-        },
-    })
-);
+gulp.task("default", ["lint", "test", "build", "validate"]);
 
 // Build all
 
-gulp.task("build", ["compile-react", "less", "copy"]);
+gulp.task("build", ["compile-typescript", "compile-react", "less", "copy"]);
 
 // Compile react sources
 
@@ -174,6 +100,10 @@ gulp.task("compile-react", () =>
         .pipe(sourcemaps.write("."))
         .pipe(gulp.dest(config.react.dest)));
 
+gulp.task("compile-typescript", () =>
+    gulp.src(config.ts.sources)
+        .pipe(tsProject())
+        .pipe(gulp.dest(config.ts.dest)));
 // Build the CSS
 
 gulp.task("less", () =>
@@ -237,3 +167,35 @@ gulp.task("validate", () => {
         }
     }
 });
+
+var builder = require('@jenkins-cd/js-builder');
+
+builder.src([
+    'src/js',
+    'less',
+    'dist' // for icons & fonts; NOTE: would be nice to find another way to do this as files in dist creates issues for jest & eslint
+]);
+
+builder.tests(config.test.sources);
+
+// redefine 'lint' to check only react and test sources (avoid dist)
+builder.defineTask("lint", () => (
+    gulp.src([config.react.sources, config.test.sources])
+        .pipe(lint())
+        .pipe(lint.format())
+        .pipe(lint.failAfterError())
+));
+
+
+//
+// Create the main bundle.
+//
+builder.bundle('src/js/components/index.js', 'jenkins-design-language.js')
+    .inDir('target/classes/io/jenkins/blueocean')
+    .less('less/jenkins-design-language.less')
+    .export('moment')
+    .export('moment-duration-format')
+    .export('react')
+    .export('react-dom')
+    .export('react-router')
+    .export('react-addons-css-transition-group');

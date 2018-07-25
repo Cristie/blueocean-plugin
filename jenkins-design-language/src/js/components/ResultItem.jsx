@@ -12,7 +12,7 @@ import type { Result } from './status/StatusIndicator';
 type State = {
     resultClean: Result,
     statusGlyph: ?ReactChildren,
-    expanded: boolean
+    expanded: boolean,
 };
 
 type Props = {
@@ -26,7 +26,6 @@ type Props = {
 };
 
 export class ResultItem extends Component {
-
     state: State;
 
     constructor(props: Props) {
@@ -40,7 +39,22 @@ export class ResultItem extends Component {
 
     componentWillMount() {
         this.handleProps(this.props, this.props);
+
+        this.infiniteRotationRunning = false;
+        this.infiniteRotateDegrees = 0;
+        this.isEdgeOrIE = (!!window.MSInputMethodContext && !!document.documentMode) || window.navigator.userAgent.indexOf('Edge') > -1;
     }
+
+    infiniteLoadingTimer = () => {
+        this.infiniteRotateDegrees += 1.5;
+
+        if (this.infiniteRotateDegrees >= 360) {
+            this.infiniteRotateDegrees = 0;
+        }
+
+        this.animatedElement.setAttribute('transform', `rotate(${this.infiniteRotateDegrees})`);
+        this.requestAnimationFrameId = requestAnimationFrame(this.infiniteLoadingTimer);
+    };
 
     componentWillReceiveProps(nextProps: Props) {
         this.handleProps(nextProps, this.props);
@@ -54,7 +68,7 @@ export class ResultItem extends Component {
         }
 
         const newExpanded = !!props.expanded;
-        if (newExpanded !== (!!oldProps.expanded)) {
+        if (newExpanded !== !!oldProps.expanded) {
             // check whether we want to change the state or whether we already are in the correct state
             if (newExpanded !== this.state.expanded) {
                 this.toggleExpanded();
@@ -62,7 +76,7 @@ export class ResultItem extends Component {
         }
     }
 
-    toggleExpanded: Function = (e) => {
+    toggleExpanded: Function = e => {
         const selection = window.getSelection ? window.getSelection() : false;
         const selected = selection && selection.toString();
         if (this.props.children && !selected) {
@@ -87,6 +101,10 @@ export class ResultItem extends Component {
         e.stopPropagation();
     };
 
+    componentWillUnmount() {
+        cancelAnimationFrame(this.requestAnimationFrameId);
+    }
+
     render() {
         const { label, extraInfo } = this.props;
         const { resultClean, statusGlyph } = this.state;
@@ -102,6 +120,7 @@ export class ResultItem extends Component {
 
         const outerClassName = classes.join(' ');
         const iconClassName = `result-item-icon result-bg ${resultClean}`;
+        const isIconSpinning = resultClean === 'running' && !this.infiniteRotationRunning ? 'spinAnimation' : '';
 
         const linkifyOptions = {
             attributes: {
@@ -109,32 +128,44 @@ export class ResultItem extends Component {
             },
         };
 
+        if (resultClean === 'running' && !this.infiniteRotationRunning && this.isEdgeOrIE) {
+            requestAnimationFrame(this.infiniteLoadingTimer);
+            this.infiniteRotationRunning = true;
+        }
+
         return (
             <div className={outerClassName}>
                 <div className="result-item-head" onClick={this.toggleExpanded}>
                     <span className={iconClassName}>
                         <svg width="28" height="34">
-                            <g transform="translate(14 18)" className="result-status-glyph">{statusGlyph}</g>
+                            <g transform="translate(14 18)" className="result-status-glyph">
+                                <g className={isIconSpinning} ref={c => (this.animatedElement = c)}>
+                                    {statusGlyph}
+                                </g>
+                            </g>
                         </svg>
                     </span>
                     <span className="result-item-title">
                         <Expando expanded={expanded} disabled={!hasChildren} />
-                        <span className="result-item-label">
-                            <Linkify options={linkifyOptions}>{label}</Linkify>
-                        </span>
-                        <span className="result-item-extra-info">
-                            {extraInfo}
-                        </span>
+                        <Linkify className="result-item-label" options={linkifyOptions}>
+                            {label}
+                        </Linkify>
+                        <span className="result-item-extra-info">{extraInfo}</span>
                     </span>
                 </div>
-                <ReactCSSTransitionGroup transitionName="slide-down"
-                                         transitionAppear
-                                         transitionAppearTimeout={300}
-                                         transitionEnterTimeout={300}
-                                         transitionLeaveTimeout={300}>{
-                    expanded ? <div className="result-item-children" key="k">{this.props.children}</div>
-                        : null
-                }</ReactCSSTransitionGroup>
+                <ReactCSSTransitionGroup
+                    transitionName="slide-down"
+                    transitionAppear
+                    transitionAppearTimeout={300}
+                    transitionEnterTimeout={300}
+                    transitionLeaveTimeout={300}
+                >
+                    {expanded ? (
+                        <div className="result-item-children" key="k">
+                            {this.props.children}
+                        </div>
+                    ) : null}
+                </ReactCSSTransitionGroup>
             </div>
         );
     }
@@ -153,7 +184,6 @@ ResultItem.propTypes = {
 // We can extract this into an exported component if we need it elsewhere
 class Expando extends Component {
     render() {
-
         const classes = ['result-item-expando'];
 
         if (this.props.expanded) {

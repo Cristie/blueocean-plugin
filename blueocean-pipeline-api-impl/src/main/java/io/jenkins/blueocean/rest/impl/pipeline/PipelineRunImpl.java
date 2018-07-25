@@ -3,6 +3,7 @@ package io.jenkins.blueocean.rest.impl.pipeline;
 import hudson.Extension;
 import hudson.model.Queue;
 import hudson.model.Run;
+import hudson.model.queue.CauseOfBlockage;
 import hudson.scm.ChangeLogSet;
 import hudson.scm.ChangeLogSet.Entry;
 import io.jenkins.blueocean.commons.ServiceException;
@@ -39,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.io.IOException;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -57,11 +57,6 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
     private static final Logger logger = LoggerFactory.getLogger(PipelineRunImpl.class);
     public PipelineRunImpl(WorkflowRun run, Reachable parent, BlueOrganization organization) {
         super(run, parent, organization);
-    }
-
-    @Exported(name = "description")
-    public String getDescription() {
-        return run.getDescription();
     }
 
     @Exported(name = Branch.BRANCH, inline = true)
@@ -96,7 +91,10 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
                 for (ChangeLogSet.Entry e : cs) {
                     cnt++;
                     String id = e.getCommitId();
-                    if (id == null) id = String.valueOf(cnt);
+                    if (id == null)
+                    {
+                        id = String.valueOf( cnt );
+                    }
                     m.put(id, new ChangeSetResource(organization, e, this));
                 }
             }
@@ -177,7 +175,7 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
     }
 
     private boolean isReplayable(ReplayAction replayAction) {
-        return replayAction != null && replayAction.isEnabled();
+        return replayAction != null && replayAction.isRebuildEnabled();
     }
 
     @Override
@@ -250,8 +248,9 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
                 Run r = task.runForDisplay();
                 if (r != null && r.equals(run)) {
                     String cause = i.getCauseOfBlockage().getShortDescription();
-                    if (task.getCauseOfBlockage() != null) {
-                        cause = task.getCauseOfBlockage().getShortDescription();
+                    CauseOfBlockage causeOfBlockage = task.getCauseOfBlockage();
+                    if ( causeOfBlockage != null) {
+                        return causeOfBlockage.getShortDescription();
                     }
                     return cause;
                 }
@@ -264,7 +263,7 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
     public static class FactoryImpl extends BlueRunFactory {
 
         @Override
-        public BlueRun getRun(Run run, Reachable parent, BlueOrganization organization) {
+        public BlueRun getRun( Run run, Reachable parent, BlueOrganization organization) {
             if(run instanceof WorkflowRun) {
                 return new PipelineRunImpl((WorkflowRun) run, parent, organization);
             }
@@ -272,13 +271,10 @@ public class PipelineRunImpl extends AbstractRunImpl<WorkflowRun> {
         }
     }
 
-    static final Comparator<BlueRun> LATEST_RUN_START_TIME_COMPARATOR = new Comparator<BlueRun>() {
-        @Override
-        public int compare(BlueRun o1, BlueRun o2) {
+    static final Comparator<BlueRun> LATEST_RUN_START_TIME_COMPARATOR = (o1, o2) -> {
             Long t1 = (o1 != null  && o1.getStartTime() != null) ? o1.getStartTime().getTime() : 0;
             Long t2 = (o2 != null  && o2.getStartTime() != null) ? o2.getStartTime().getTime() : 0;
             return t2.compareTo(t1);
-        }
-    };
+        };
 
 }

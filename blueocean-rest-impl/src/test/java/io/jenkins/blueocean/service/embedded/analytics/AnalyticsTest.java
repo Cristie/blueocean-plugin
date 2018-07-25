@@ -7,7 +7,6 @@ import hudson.model.User;
 import io.jenkins.blueocean.analytics.Analytics;
 import io.jenkins.blueocean.analytics.Analytics.TrackRequest;
 import io.jenkins.blueocean.commons.ServiceException;
-import io.jenkins.blueocean.service.embedded.BaseTest;
 import jenkins.model.Jenkins;
 import org.junit.Assert;
 import org.junit.Before;
@@ -19,7 +18,7 @@ import java.util.Map;
 
 public class AnalyticsTest {
     @Rule
-    public JenkinsRule j = new BaseTest.BaseTestJenkinsRule();
+    public JenkinsRule j = new JenkinsRule();
 
     MyAnalytics analytics;
 
@@ -34,10 +33,11 @@ public class AnalyticsTest {
         Assert.assertTrue(Analytics.get() instanceof NullAnalytics);
     }
 
-    @Test
+    // Re-enable when we want to use keen
+    // @Test
     public void enableUsageStats() {
         UsageStatistics.DISABLED = false;
-        Assert.assertTrue(Analytics.get() instanceof KeenAnalyticsImpl);
+        Assert.assertFalse(Analytics.get() instanceof KeenAnalyticsImpl);
     }
 
     @Test
@@ -57,7 +57,6 @@ public class AnalyticsTest {
 
         Map<String, Object> expectedProps = Maps.newHashMap(props);
         expectedProps.put("jenkins", analytics.getServer());
-        expectedProps.put("userId", analytics.getIdentity());
 
         Assert.assertEquals("test", analytics.lastName);
         Assert.assertEquals( expectedProps, analytics.lastProps);
@@ -72,7 +71,6 @@ public class AnalyticsTest {
 
         Map<String, Object> expectedProps = Maps.newHashMap();
         expectedProps.put("jenkins", analytics.getServer());
-        expectedProps.put("userId", analytics.getIdentity());
         expectedProps.put("jenkinsVersion", j.jenkins.getVersion().toString());
         expectedProps.put("blueoceanVersion", Jenkins.getInstance().getPlugin("blueocean-commons").getWrapper().getVersion());
 
@@ -124,7 +122,7 @@ public class AnalyticsTest {
         }
 
         public String getIdentity() {
-            return identity();
+            return identity(server());
         }
     }
 }

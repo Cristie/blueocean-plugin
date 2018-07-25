@@ -21,8 +21,7 @@ function loadConfig() {
         }
 
         // typically '/jenkins/blue/rest'
-        restBaseURL = `${blueOceanAppURL}/rest`
-            .replace(/\/\/+/g, '/'); // eliminate any duplicated slashes
+        restBaseURL = `${blueOceanAppURL}/rest`.replace(/\/\/+/g, '/'); // eliminate any duplicated slashes
 
         loaded = true;
     } catch (error) {
@@ -33,7 +32,7 @@ function loadConfig() {
     }
 }
 
-export default {
+export const UrlConfig = {
     getJenkinsRootURL() {
         if (!loaded) {
             loadConfig();

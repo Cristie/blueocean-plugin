@@ -8,10 +8,14 @@ import { Dropdown, TextInput } from '@jenkins-cd/design-language';
 import { Split } from './Split';
 import focusOnElement from './focusOnElement';
 import InputText from './InputText';
+import InputTextArea from './InputTextArea';
 import { ValidationMessageList } from './ValidationMessageList';
+import { i18nTranslator } from '@jenkins-cd/blueocean-core-js';
+
+const t = i18nTranslator('blueocean-pipeline-editor');
 
 type Props = {
-    node: PipelineInfo|StageInfo,
+    node: PipelineInfo | StageInfo,
     onChange: (agent: PipelineAgent) => any,
 };
 
@@ -24,8 +28,8 @@ type State = {
 type DefaultProps = typeof AgentConfiguration.defaultProps;
 
 function agentConfigParamFilter(agent) {
-    return (param) => {
-        switch(agent.type) {
+    return param => {
+        switch (agent.type) {
             case 'docker':
                 return ['image', 'args'].indexOf(param.name) >= 0;
             case 'dockerfile':
@@ -41,25 +45,24 @@ function agentConfigParamFilter(agent) {
 }
 
 export class AgentConfiguration extends Component<DefaultProps, Props, State> {
-    props:Props;
-    state:State;
+    props: Props;
+    state: State;
 
-    constructor(props:Props) {
+    constructor(props: Props) {
         super(props);
         this.state = { agents: null, selectedAgent: props.node.agent };
     }
 
     componentWillMount() {
         pipelineMetadataService.getAgentListing(data => {
-            this.setState({agents: data});
+            this.setState({ agents: data });
         });
     }
 
-    componentDidMount() {
-    }
+    componentDidMount() {}
 
     componentWillReceiveProps(nextProps: Props) {
-        this.setState({selectedAgent: nextProps.node.agent});
+        this.setState({ selectedAgent: nextProps.node.agent });
     }
 
     getRealOrEmptyArg(key: string) {
@@ -76,7 +79,7 @@ export class AgentConfiguration extends Component<DefaultProps, Props, State> {
             value: {
                 isLiteral: true,
                 value: '',
-            }
+            },
         };
         return val;
     }
@@ -113,6 +116,25 @@ export class AgentConfiguration extends Component<DefaultProps, Props, State> {
         focusOnElement('.agent-select .required input');
     }
 
+    _getAgentInputControl(param, pristine, val) {
+        const inputProps = {
+            hasError: param.isRequired && !pristine && !val,
+            isRequired: param.isRequired,
+            defaultValue: val,
+            onChange: val => {
+                this.setAgentValue(param.name, val);
+                param.isRequired && this.setState({ pristine: false });
+            },
+            onBlur: e => param.isRequired && this.setState({ pristine: false }),
+        };
+
+        if (param.name === 'args') {
+            return <InputTextArea {...inputProps} />;
+        } else {
+            return <InputText {...inputProps} />;
+        }
+    }
+
     render() {
         const { node } = this.props;
         const { agents, selectedAgent, pristine } = this.state;
@@ -132,31 +154,34 @@ export class AgentConfiguration extends Component<DefaultProps, Props, State> {
             }
         }
 
-        return (<div className="agent-select">
-            <h5>Agent</h5>
-            <ValidationMessageList node={selectedAgent} />
-            <Dropdown labelField="symbol" options={agents}
-                defaultOption={selectedAgentMetadata}
-                onChange={agent => this.onAgentChanged(agent)} />
-            <Split>
-            {selectedAgent && selectedAgentMetadata && <div className="agent-parameters">
-                {selectedAgentMetadata.parameters.filter(agentConfigParamFilter(selectedAgent)).map(param => {
-                    const val = this.getRealOrEmptyArg(param.name).value.value;
-                    return (<div className="agent-param">
-                        <label key={selectedAgent.type + '/' + param.name}>
-                            <div>{param.capitalizedName}{param.isRequired ? '*' : ''}</div>
-                            <div>
-                                <InputText hasError={param.isRequired && !pristine && !val}
-                                    isRequired={param.isRequired}
-                                    defaultValue={val}
-                                    onChange={val => { this.setAgentValue(param.name, val); param.isRequired && this.setState({ pristine: false }); }}
-                                    onBlur={e => param.isRequired && this.setState({ pristine: false })} />
+        return (
+            <div className="agent-select">
+                <h5>{t('editor.jenkins.agent', { default: 'Agent' })}</h5>
+                <ValidationMessageList node={selectedAgent} />
+                <Dropdown labelField="symbol" options={agents} defaultOption={selectedAgentMetadata} onChange={agent => this.onAgentChanged(agent)} />
+                <Split>
+                    {selectedAgent &&
+                        selectedAgentMetadata && (
+                            <div className="agent-parameters">
+                                {selectedAgentMetadata.parameters.filter(agentConfigParamFilter(selectedAgent)).map(param => {
+                                    const val = this.getRealOrEmptyArg(param.name).value.value;
+
+                                    return (
+                                        <div className="agent-param">
+                                            <label key={selectedAgent.type + '/' + param.name}>
+                                                <div>
+                                                    {param.capitalizedName}
+                                                    {param.isRequired ? '*' : ''}
+                                                </div>
+                                                <div>{this._getAgentInputControl(param, pristine, val)}</div>
+                                            </label>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        </label>
-                    </div>);
-                })}
-            </div>}
-            </Split>
-        </div>);
+                        )}
+                </Split>
+            </div>
+        );
     }
 }

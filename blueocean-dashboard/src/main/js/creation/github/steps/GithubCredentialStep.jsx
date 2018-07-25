@@ -3,9 +3,7 @@ import Extensions from '@jenkins-cd/js-extensions';
 
 import FlowStep from '../../flow2/FlowStep';
 
-
 export default class GithubCredentialsStep extends React.Component {
-
     constructor(props) {
         super(props);
 
@@ -37,7 +35,7 @@ export default class GithubCredentialsStep extends React.Component {
         const scmId = this.props.flowManager.getScmId();
         const loading = this.state.loading;
         const disabled = this.state.complete;
-        const title = loading ? 'Loading...' : 'Connect to Github';
+        const title = loading ? 'Loading...' : 'Connect to GitHub';
 
         const githubConfig = {
             scmId,

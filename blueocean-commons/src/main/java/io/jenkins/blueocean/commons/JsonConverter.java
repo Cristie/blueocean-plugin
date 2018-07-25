@@ -7,10 +7,13 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.google.common.base.Charsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.text.SimpleDateFormat;
@@ -26,6 +29,10 @@ public class JsonConverter{
     public static <T> T toJava(String data, Class<T> type) {
 
         return toJava(new StringReader(data), type);
+    }
+
+    public static <T> T toJava(InputStream data, Class<T> type) {
+        return toJava(new InputStreamReader(data, Charsets.UTF_8), type);
     }
 
     public static <T> T toJava(Reader data, Class<T> type) {
@@ -60,6 +67,8 @@ public class JsonConverter{
         mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        mapper.configure( SerializationFeature.FAIL_ON_SELF_REFERENCES, false );
         return mapper;
     }
 }

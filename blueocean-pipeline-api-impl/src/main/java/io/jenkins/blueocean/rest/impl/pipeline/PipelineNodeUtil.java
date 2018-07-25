@@ -3,6 +3,7 @@ package io.jenkins.blueocean.rest.impl.pipeline;
 import com.google.common.base.Predicate;
 import hudson.model.Action;
 import hudson.model.Queue;
+import hudson.model.queue.CauseOfBlockage;
 import io.jenkins.blueocean.rest.model.BlueRun;
 import org.jenkinsci.plugins.pipeline.StageStatus;
 import org.jenkinsci.plugins.pipeline.SyntheticStage;
@@ -95,13 +96,18 @@ public class PipelineNodeUtil {
         if(node == null){
             return false;
         }
+
         for (Action action : node.getActions()) {
             if (action instanceof TagsAction && ((TagsAction) action).getTagValue(StageStatus.TAG_NAME) != null) {
                 TagsAction tagsAction =  (TagsAction) action;
                 String value = tagsAction.getTagValue(StageStatus.TAG_NAME);
-                return value != null && value.equals(StageStatus.getSkippedForConditional());
+                return value != null && (value.equals(StageStatus.getSkippedForConditional()) ||
+                                        value.equals(StageStatus.getSkippedForFailure()) ||
+                                        value.equals(StageStatus.getSkippedForUnstable())
+                );
             }
         }
+
         return false;
     }
 
@@ -151,9 +157,16 @@ public class PipelineNodeUtil {
                 if(p.equals(stage)){
                     Queue.Item item = QueueItemAction.getQueueItem(nodeBlock);
                     if (item != null) {
-                        String cause = item.getCauseOfBlockage().getShortDescription();
-                        if (cause == null) {
-                            cause = item.task.getCauseOfBlockage().getShortDescription();
+                        CauseOfBlockage causeOfBlockage = item.getCauseOfBlockage();
+                        String cause = null;
+                        if (causeOfBlockage != null) {
+                            cause = causeOfBlockage.getShortDescription();
+                            if (cause == null) {
+                                causeOfBlockage = item.task.getCauseOfBlockage();
+                                if(causeOfBlockage != null) {
+                                    return causeOfBlockage.getShortDescription();
+                                }
+                            }
                         }
                         return cause;
                     }

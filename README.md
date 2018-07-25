@@ -59,7 +59,9 @@ Core Web infrastructure that bootstraps BlueOcean UI and integrates REST API cor
     
 ## Building and running
 
-At a minimum you will need JVM and Maven installed, if you are doing active JavaScript development, installing NodeJS is a good idea too. 
+At a minimum you will need a JVM and Maven installed, if you are doing active JavaScript development, 
+you may want to install NodeJS, but it is not a requirement as the `frontend-maven-plugin` will install
+the correct version of Node locally for each plugin to build and develop with.
 
 ## Build everything (from root directory)
 Builds all maven modules (run this the first time you check things out, at least)
@@ -83,6 +85,11 @@ $ mvn -f blueocean/pom.xml hpi:run
 Then open http://localhost:8080/jenkins/blue to start using Blue Ocean.
 
 The Jenkins Classic UI exists side-by-side at its usual place at http://localhost:8080/jenkins.
+
+NOTE: while running in this mode, Jenkins will automatically re-compile your Javascript files
+and LESS files for all local plugins (including those linked with `hpi:hpl`) where a `package.json` is found
+that contains a `mvnbuild` script. If you would like to disable this behavior, you may set
+the system property: `-Dblueocean.features.BUNDLE_WATCH_SKIP=true`
 
 ## Browser compatibility
 
@@ -132,6 +139,8 @@ __NOTE__: look in the README.md of the respective modules for more detailed dev 
 
 #### NPM and shrinkwrap
 
+- NOTE: after running `npm install` you will have some copies of Node you can use without installing it globally on your system,
+e.g. from the repository root: `PATH=blueocean-web/node:$PATH npm <do-stuff>`
 - Ensure your npm is 3.10.8+ as this release fixes some important bugs with shrinkwrap, notably #11735 in [notes](https://github.com/npm/npm/releases/tag/v3.10.8)
 - Don't edit package.json directly; use npm install to ensure that both package.json and npm-shrinkwrap.json are updated.
 - To add or update a dependency:
@@ -159,6 +168,31 @@ npm i
 npm shrinkwrap --dev
 ```
 
+#### Source code formatting
+
+We are using [prettier.js](https://prettier.io/) to format JavaScript in order to keep source consistent automatically
+rather than with build-time errors about unformatted code. We do this via a pre-commit hook, which you will have to 
+enable in your local checkout.
+
+* From the root directory of your `blueocean/` clone, first create the symlink:
+
+````
+jdoe@localhost> ln -s ../../bin/pre-commit.js .git/hooks/pre-commit
+````
+        
+* Check the symlink, because if it's wrong git will silently ignore it:
+
+````
+jdoe@localhost> file .git/hooks/pre-commit
+# => .git/hooks/pre-commit: a /usr/bin/env node script text executable, ASCII text
+````
+
+* Check (with no staged changes) to make sure it's going to run successfully in your environment:
+
+````
+jdoe@localhost> .git/hooks/pre-commit
+# => No staged files to format.
+````
 
 ## Contributing - help wanted
 
@@ -194,7 +228,7 @@ You can chat to folks on #jenkins-ux on freenode (IRC). You can also email the j
 
 Advanced front end development with react, redux and stuff by @scherler: https://docs.google.com/presentation/d/1dbaYTIGjGT9xX1JnWnaqjMumq94M9nGwljfMQaVtUFc/edit?usp=sharing
 
-Watch @i386 and @jenkinsci on Twitter for frequent updates and news. 
+Watch @jenkinsci on Twitter for frequent updates and news. 
 
 ## Upgrading dependencies
 
@@ -205,7 +239,7 @@ If you wanted to see if a new version of a library works with blue ocean:
 * If it isn't published yet, release a beta to the experimental update center
 * Open a pull request with the changes to the `pom.xml` in the root of this project (beta dependencies are fine)
 * Mark the pull request as "needs-review"
-* Make sure to "@mention" people - @i386, @vivek are some good ones to start with in a pull request description
+* Make sure to "@mention" people - @michaelneale @vivek are some good ones to start with in a pull request description
 * IF the dependency being upgraded is only released to the experimental update center (ie a beta) please also mark the PR as 'DO NOT MERGE' (once it has been released to the main update center, this can be removed)
 * Check back later for build success (ie unit tests)
 * The Acceptance Test Harness will normally be automatically triggered after a successful PR build, however, it ie best to check it has run: (https://ci.blueocean.io/job/ATH-Jenkinsfile/job/master/) - consult a blue ocean contributor (see below) and they will ensure it has run. This is required for a dependency change.
@@ -219,7 +253,7 @@ Contacting contributors:
 
 Gitter is the day to day chat venue used, you can log in with your github identity.
 
-* look for @michaelneale, @kzantow, @vivek or @i386 on gitter https://gitter.im/jenkinsci/blueocean-plugin or #jenkins-ux on freenode
+* look for @michaelneale, @kzantow, @vivek on gitter https://gitter.im/jenkinsci/blueocean-plugin or #jenkins-ux on freenode
 * Post to the mailing list: https://groups.google.com/forum/#!forum/jenkinsci-ux
 
 

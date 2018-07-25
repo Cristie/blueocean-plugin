@@ -2,12 +2,14 @@ import React, { Component, PropTypes } from 'react';
 import Lozenge from './Lozenge';
 import { Link } from 'react-router';
 import LinkifiedText from './LinkifiedText';
+import { UrlConfig } from '@jenkins-cd/blueocean-core-js';
 
 export default class RunMessageCell extends Component {
     propTypes = {
         run: PropTypes.object,
         t: PropTypes.func,
         linkTo: PropTypes.string,
+        changesUrl: PropTypes.string,
     };
 
     render() {
@@ -32,7 +34,7 @@ export default class RunMessageCell extends Component {
             message = (
                 <span className="RunMessageCell" title={run.description}>
                     <span className="RunMessageCellInner">
-                        <Link to={linkTo} className="unstyled-link" >
+                        <Link to={linkTo} className="unstyled-link">
                             {run.description}
                         </Link>
                     </span>
@@ -42,16 +44,18 @@ export default class RunMessageCell extends Component {
             const commitMsg = run.changeSet[run.changeSet.length - 1].msg;
 
             if (run.changeSet.length > 1) {
+                const { changesUrl } = this.props;
+
                 return (
                     <span className="RunMessageCell" title={commitMsg}>
                         <span className="RunMessageCellInner">
                             <LinkifiedText text={commitMsg} textLink={linkTo} partialTextLinks={run.changeSet[run.changeSet.length - 1].issues} />
                         </span>
-                        <Lozenge title={t('lozenge.commit', { 0: run.changeSet.length })} />
+                        <Lozenge title={t('lozenge.commit', { 0: run.changeSet.length })} linkTo={changesUrl} />
                     </span>
                 );
             }
-            
+
             return (
                 <span className="RunMessageCell" title={commitMsg}>
                     <span className="RunMessageCellInner">
@@ -60,18 +64,38 @@ export default class RunMessageCell extends Component {
                 </span>
             );
         } else if (showCauses) {
-            // Last cause is always more significant than the first
-            const cause = run.causes[run.causes.length - 1].shortDescription;
-            const linkedCauseMsg = (<Link to={linkTo} className="unstyled-link" >{ cause }</Link>);
+            const lastCause = (run && run.causes.length > 0 && run.causes[run.causes.length - 1]) || null;
+            const cause = (lastCause && lastCause.shortDescription) || null;
+
+            if (lastCause && lastCause.upstreamProject) {
+                const activityUrl = `${UrlConfig.getJenkinsRootURL()}/${lastCause.upstreamUrl}display/redirect?provider=blueocean`;
+                const runUrl = `${UrlConfig.getJenkinsRootURL()}/${lastCause.upstreamUrl}${lastCause.upstreamBuild}/display/redirect?provider=blueocean`;
+
+                return (
+                    <span className="RunMessageCell" title={cause}>
+                        Started by upstream pipeline "<a href={activityUrl}>{lastCause.upstreamProject}</a>" build&nbsp;{' '}
+                        <a href={runUrl}>#{lastCause.upstreamBuild}</a>
+                    </span>
+                );
+            }
+
+            const linkedCauseMsg = (
+                <Link to={linkTo} className="unstyled-link">
+                    <span className="ellipsis-text">{cause}</span>
+                </Link>
+            );
+
             return (
                 <span className="RunMessageCell" title={cause}>
-                    <span className="RunMessageCellInner">
-                        {linkedCauseMsg}
-                    </span>
+                    <span className="RunMessageCellInner">{linkedCauseMsg}</span>
                 </span>
             );
         } else {
-            message = (<span className="RunMessageCell"><span className="RunMessageCellInner">–</span></span>);
+            message = (
+                <span className="RunMessageCell">
+                    <span className="RunMessageCellInner">–</span>
+                </span>
+            );
         }
         return message;
     }

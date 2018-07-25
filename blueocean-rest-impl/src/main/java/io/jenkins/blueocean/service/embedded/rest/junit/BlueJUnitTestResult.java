@@ -1,7 +1,5 @@
 package io.jenkins.blueocean.service.embedded.rest.junit;
 
-import com.google.common.base.Function;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import hudson.Extension;
 import hudson.model.Run;
@@ -12,10 +10,12 @@ import io.jenkins.blueocean.rest.Reachable;
 import io.jenkins.blueocean.rest.factory.BlueTestResultFactory;
 import io.jenkins.blueocean.rest.hal.Link;
 import io.jenkins.blueocean.rest.model.BlueTestResult;
+import org.apache.commons.lang.StringUtils;
 import org.kohsuke.accmod.Restricted;
 import org.kohsuke.accmod.restrictions.NoExternalUse;
 
-import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.apache.commons.lang.StringUtils.isEmpty;
 
@@ -34,7 +34,7 @@ public class BlueJUnitTestResult extends BlueTestResult {
 
     @Override
     public String getName() {
-        return testResult.getName() + " – " + testResult.getClassName();
+        return testResult.getDisplayName() + " – " + testResult.getClassName();
     }
 
     @Override
@@ -92,7 +92,7 @@ public class BlueJUnitTestResult extends BlueTestResult {
 
     @Override
     protected String getUniqueId() {
-        return testResult.getId();
+        return testResult.getClassName() + ":" + testResult.getId();
     }
 
     @Override
@@ -123,23 +123,28 @@ public class BlueJUnitTestResult extends BlueTestResult {
         return log;
     }
 
+    @Override
+    public boolean hasStdLog()
+    {
+        return StringUtils.isNotBlank( testResult.getStderr() ) //
+            || StringUtils.isNotBlank( testResult.getStdout() );
+    }
+
     @Extension
     public static class FactoryImpl extends BlueTestResultFactory {
         @Override
         public Result getBlueTestResults(Run<?, ?> run, final Reachable parent) {
-            Iterable<BlueTestResult> results;
             TestResultAction action = run.getAction(TestResultAction.class);
-            if (action != null) {
-                results = Iterables.transform(Iterables.concat(action.getFailedTests(), action.getSkippedTests(), action.getPassedTests()), new Function<CaseResult, BlueTestResult>() {
-                    @Override
-                    public BlueTestResult apply(@Nullable CaseResult input) {
-                        return new BlueJUnitTestResult(input, parent.getLink());
-                    }
-                });
-            } else {
-                results = ImmutableList.of();
+            if (action == null) {
+                return Result.notFound();
             }
-            return Result.of(results);
+            List<CaseResult> testsToTransform = new ArrayList<>();
+            testsToTransform.addAll(action.getFailedTests());
+            testsToTransform.addAll(action.getSkippedTests());
+            testsToTransform.addAll(action.getPassedTests());
+            return Result.of(Iterables.transform(testsToTransform, //
+                                                 input ->  new BlueJUnitTestResult(input, parent.getLink())));
         }
     }
+
 }

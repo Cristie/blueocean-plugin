@@ -2,6 +2,7 @@ import React, { Component, PropTypes } from 'react';
 import { logging } from '@jenkins-cd/blueocean-core-js';
 import { observer } from 'mobx-react';
 import { KaraokeService } from '../index';
+import { QueuedState } from './QueuedState';
 import LogConsole from './LogConsole';
 import LogToolbar from './LogToolbar';
 
@@ -30,10 +31,7 @@ export default class FreeStyle extends Component {
         if (!nextProps.augmenter.karaoke) {
             this.stopKaraoke();
         }
-        if (
-            (currentStart !== nextStart && nextStart !== undefined) ||
-            (nextProps.run.isCompleted() && !this.props.run.isCompleted())
-        ) {
+        if ((currentStart !== nextStart && nextStart !== undefined) || (nextProps.run.isCompleted() && !this.props.run.isCompleted())) {
             logger.debug('re-fetching since result changed and we want to display the full log');
             this.pager.fetchGeneralLog({ start: nextStart });
         }
@@ -50,6 +48,21 @@ export default class FreeStyle extends Component {
         this.pager = KaraokeService.generalLogPager(augmenter, location);
     }
     render() {
+        const run = this.props.run;
+        const isPipelineQueued = run && run.isQueued();
+        if (isPipelineQueued) {
+            // if queued we are saying that we are waiting to start
+            logger.debug('EarlyOut - abort due to run queued.');
+            return (
+                <QueuedState
+                    translation={this.props.t}
+                    titleKey="rundetail.pipeline.waiting.message.title"
+                    messageKey="rundetail.pipeline.waiting.message.description"
+                    message={run.causeOfBlockage}
+                />
+            );
+        }
+
         if (this.pager.pending) {
             logger.debug('abort due to pager pending');
             return null;
@@ -57,24 +70,27 @@ export default class FreeStyle extends Component {
         const { t, router, location, scrollToBottom, augmenter } = this.props;
         const { data: logArray, hasMore } = this.pager.log;
         logger.debug('props', scrollToBottom, this.pager.log.newStart, augmenter.generalLogUrl);
-        return (<div>
-            <LogToolbar
-                fileName={augmenter.generalLogFileName}
-                url={augmenter.generalLogUrl}
-                title={t('rundetail.pipeline.logs', { defaultValue: 'Logs' })}
-            />
-            <LogConsole {...{
-                t,
-                router,
-                location,
-                hasMore,
-                scrollToBottom,
-                logArray,
-                currentLogUrl: augmenter.generalLogUrl,
-                key: augmenter.generalLogUrl,
-            }}
-            />
-        </div>);
+        return (
+            <div>
+                <LogToolbar
+                    fileName={augmenter.generalLogFileName}
+                    url={augmenter.generalLogUrl}
+                    title={t('rundetail.pipeline.logs', { defaultValue: 'Logs' })}
+                />
+                <LogConsole
+                    {...{
+                        t,
+                        router,
+                        location,
+                        hasMore,
+                        scrollToBottom,
+                        logArray,
+                        currentLogUrl: augmenter.generalLogUrl,
+                        key: augmenter.generalLogUrl,
+                    }}
+                />
+            </div>
+        );
     }
 }
 

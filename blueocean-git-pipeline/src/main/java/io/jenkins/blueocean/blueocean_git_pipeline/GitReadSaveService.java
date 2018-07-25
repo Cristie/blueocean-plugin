@@ -23,33 +23,36 @@
  */
 package io.jenkins.blueocean.blueocean_git_pipeline;
 
-import java.io.IOException;
-
-import hudson.model.User;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.kohsuke.stapler.StaplerRequest;
-
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import hudson.Extension;
 import hudson.model.Item;
+import hudson.model.User;
 import hudson.remoting.Base64;
-import hudson.security.Permission;
 import io.jenkins.blueocean.commons.ServiceException;
+import io.jenkins.blueocean.credential.CredentialsUtils;
 import io.jenkins.blueocean.rest.impl.pipeline.ScmContentProvider;
+import io.jenkins.blueocean.rest.impl.pipeline.credential.BlueOceanDomainRequirement;
 import io.jenkins.blueocean.rest.impl.pipeline.scm.GitContent;
+
+import java.io.IOException;
 import javax.annotation.Nonnull;
+
 import jenkins.branch.MultiBranchProject;
 import jenkins.plugins.git.GitSCMSource;
 import jenkins.scm.api.SCMSource;
 import net.sf.json.JSONObject;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.kohsuke.stapler.StaplerRequest;
 
 /**
  * Content provider for load/save with git repositories
  */
 @Extension
 public class GitReadSaveService extends ScmContentProvider {
-    @Nonnull private static ReadSaveType TYPE = ReadSaveType.DEFAULT;
+    @Nonnull
+    private static ReadSaveType TYPE = ReadSaveType.DEFAULT;
 
     /**
      * Type of git interaction to use
@@ -79,11 +82,11 @@ public class GitReadSaveService extends ScmContentProvider {
     public String getApiUrl(@Nonnull Item item) {
         if (item instanceof org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject) {
             MultiBranchProject<?,?> mbp = (MultiBranchProject<?,?>)item;
-            SCMSource s = mbp.getSCMSources().iterator().next();
-            if (s instanceof GitSCMSource) {
-                String remote = ((GitSCMSource)s).getRemote();
-                return remote;
-            }
+            return mbp.getSCMSources().stream()
+                    .filter(s->s instanceof GitSCMSource)
+                    .map(s -> ((GitSCMSource)s).getRemote())
+                    .findFirst()
+                    .orElse(null);
         }
         return null;
     }
@@ -93,20 +96,20 @@ public class GitReadSaveService extends ScmContentProvider {
     }
 
     static GitReadSaveRequest makeSaveRequest(
-            Item item,String branch, String commitMessage,
-            String sourceBranch, String filePath, byte[] contents) {
+        Item item, String branch, String commitMessage,
+        String sourceBranch, String filePath, byte[] contents) {
         String defaultBranch = "master";
         GitSCMSource gitSource = null;
-        if (item instanceof MultiBranchProject<?,?>) {
-            MultiBranchProject<?,?> mbp = (MultiBranchProject<?,?>)item;
+        if (item instanceof MultiBranchProject<?, ?>) {
+            MultiBranchProject<?, ?> mbp = (MultiBranchProject<?, ?>) item;
             for (SCMSource s : mbp.getSCMSources()) {
                 if (s instanceof GitSCMSource) {
-                    gitSource = (GitSCMSource)s;
+                    gitSource = (GitSCMSource) s;
                 }
             }
         }
 
-        switch(TYPE) {
+        switch (TYPE) {
             case CLONE:
                 return new GitCloneReadSaveRequest(
                     gitSource,
@@ -140,11 +143,11 @@ public class GitReadSaveService extends ScmContentProvider {
     private GitReadSaveRequest makeSaveRequest(Item item, StaplerRequest req) {
         String branch = req.getParameter("branch");
         return makeSaveRequest(item,
-            branch,
-            req.getParameter("commitMessage"),
-            ObjectUtils.defaultIfNull(req.getParameter("sourceBranch"), branch),
-            req.getParameter("path"),
-            Base64.decode(req.getParameter("contents"))
+                               branch,
+                               req.getParameter("commitMessage"),
+                               ObjectUtils.defaultIfNull(req.getParameter("sourceBranch"), branch),
+                               req.getParameter("path"),
+                               Base64.decode(req.getParameter("contents"))
         );
     }
 
@@ -152,30 +155,32 @@ public class GitReadSaveService extends ScmContentProvider {
         JSONObject content = json.getJSONObject("content");
         String branch = content.getString("branch");
         return makeSaveRequest(item,
-            branch,
-            content.getString("message"),
-            content.has("sourceBranch") ? content.getString("sourceBranch") : branch,
-            content.getString("path"),
-            Base64.decode(content.getString("base64Data"))
+                               branch,
+                               content.getString("message"),
+                               content.has("sourceBranch") ? content.getString("sourceBranch") : branch,
+                               content.getString("path"),
+                               Base64.decode(content.getString("base64Data"))
         );
     }
 
     @Override
     public Object getContent(@Nonnull StaplerRequest req, @Nonnull Item item) {
-        item.checkPermission(Permission.READ);
+        item.checkPermission(Item.READ);
         User user = User.current();
         if (user == null) {
             throw new ServiceException.UnauthorizedException("Not authenticated");
         }
 
         GitReadSaveRequest r = makeSaveRequest(item, req);
+
         try {
-            String encoded = Base64.encode(r.read());
-            return new GitFile(
-                new GitContent(r.filePath, user.getId(), r.gitSource.getRemote(), r.filePath, 0, "sha", encoded, "", r.branch, r.sourceBranch, true, "")
-            );
+            final byte[] reqData = r.read();
+            String encoded = Base64.encode(reqData);
+
+            final GitContent content = new GitContent(r.filePath, user.getId(), r.gitSource.getRemote(), r.filePath, 0, "sha", encoded, "", r.branch, r.sourceBranch, true, "");
+            final GitFile gitFile = new GitFile(content);
+            return gitFile;
         } catch (ServiceException.UnauthorizedException e) {
-            //if (r.gitSource.getRemote().matches("([^@:]+@.*|ssh://.*)"))
             throw new ServiceException.PreconditionRequired("Invalid credential", e);
         } catch (IOException e) {
             throw new ServiceException.UnexpectedErrorException("Unable to get file content", e);
@@ -184,7 +189,7 @@ public class GitReadSaveService extends ScmContentProvider {
 
     @Override
     public Object saveContent(@Nonnull StaplerRequest req, @Nonnull Item item) {
-        item.checkPermission(Permission.WRITE);
+        item.checkPermission(Item.CONFIGURE);
         User user = User.current();
         if (user == null) {
             throw new ServiceException.UnauthorizedException("Not authenticated");
@@ -207,4 +212,29 @@ public class GitReadSaveService extends ScmContentProvider {
     public boolean support(@Nonnull Item item) {
         return getApiUrl(item) != null;
     }
+
+    @Nonnull
+    protected StandardUsernamePasswordCredentials getCredentialForUser(@Nonnull Item item, @Nonnull String repositoryUrl) {
+
+        User user = User.current();
+        if (user == null) { //ensure this session has authenticated user
+            throw new ServiceException.UnauthorizedException("No logged in user found");
+        }
+
+        String credentialId = GitScm.makeCredentialId(repositoryUrl);
+        StandardUsernamePasswordCredentials credential = null;
+
+        if (credentialId != null) {
+            credential = CredentialsUtils.findCredential(credentialId,
+                                            StandardUsernamePasswordCredentials.class,
+                                            new BlueOceanDomainRequirement());
+        }
+
+        if (credential == null) {
+            throw new ServiceException.UnauthorizedException("No credential found for " + credentialId + " for user " + user.getDisplayName());
+        }
+
+        return credential;
+    }
+
 }

@@ -18,13 +18,13 @@ module.exports.commands = [{
     /**
      * Returns the create pipeline page for a certain job and creates the pipeline job
      * @param jobName {String} name of the job to configure
-     * @param script{String} the name of the script that shoould be used to be injected. Has to
+     * @param script{String} the name of the script that should be used to be injected. Has to
      * be present in ROOT/src/test/resources/test_scripts
      * @param {Function} [oncreated] - callback to be invoke when finished, will expect a traditional node callback function
      */
     createPipeline: function(jobName, script, oncreated) {
         var self = this;
-        
+
         self.waitForJobDeleted(jobName);
 
         self.setValue('@nameInput', jobName);

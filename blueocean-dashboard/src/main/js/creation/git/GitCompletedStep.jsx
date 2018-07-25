@@ -1,7 +1,7 @@
 import React, { PropTypes } from 'react';
 import { observer } from 'mobx-react';
 
-import { buildPipelineUrl } from '../../util/UrlUtils';
+import { UrlBuilder } from '@jenkins-cd/blueocean-core-js';
 import FlowStep from '../flow2/FlowStep';
 import StepStatus from '../flow2/FlowStepStatus';
 import STATE from './GitCreationState';
@@ -13,7 +13,6 @@ let t = null;
  */
 @observer
 export default class GitCompletedStep extends React.Component {
-
     constructor(props) {
         super(props);
 
@@ -22,7 +21,7 @@ export default class GitCompletedStep extends React.Component {
 
     finish() {
         const pipeline = this.props.flowManager.pipeline;
-        const url = buildPipelineUrl(pipeline.organization, pipeline.fullName, 'activity');
+        const url = UrlBuilder.buildPipelineUrl(pipeline.organization, pipeline.fullName, 'activity');
         this.props.flowManager.completeFlow({ url });
     }
 
@@ -37,7 +36,7 @@ export default class GitCompletedStep extends React.Component {
         if (stateId === STATE.CREATE_PIPELINE) {
             percentage = 50;
             title = t('creation.git.step3.title_pipeline_create');
-        } else if (stateId === STATE.COMPLETE) {
+        } else if (stateId === STATE.STEP_COMPLETE_SUCCESS) {
             percentage = 100;
             setTimeout(() => this.finish(), 2000);
             status = StepStatus.COMPLETE;
